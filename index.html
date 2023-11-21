@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cookie Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+    </style>
+    <script>
+        function setCookie(cookieName, cookieValue, expirationDays) {
+            const d = new Date();
+            d.setTime(d.getTime() + (expirationDays * 24 * 60 * 60 * 1000));
+            const expires = "expires=" + d.toUTCString();
+            document.cookie = cookieName + "=" + cookieValue + ";" + expires + ";path=/";
+            displayCookie(cookieName);
+        }
+
+        function getCookie(cookieName) {
+            const name = cookieName + "=";
+            const decodedCookie = decodeURIComponent(document.cookie);
+            const ca = decodedCookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) == ' ') {
+                    c = c.substring(1);
+                }
+                if (c.indexOf(name) == 0) {
+                    return c.substring(name.length, c.length);
+                }
+            }
+            return "";
+        }
+
+        function displayCookie(cookieName) {
+            const cookieValue = getCookie(cookieName);
+            if (cookieValue != "") {
+                document.getElementById('cookieDisplay').innerHTML = "Stored Cookie Value: " + cookieValue;
+            } else {
+                document.getElementById('cookieDisplay').innerHTML = "No cookie found.";
+            }
+        }
+
+        function handleSetCookie() {
+            const userInput = document.getElementById('userInput').value;
+            setCookie('userInputCookie', userInput, 1); // Expires in 1 day
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            displayCookie('userInputCookie');
+        });
+    </script>
+</head>
+<body>
+    <h1>Interactive Cookie Demonstration</h1>
+    <input type="text" id="userInput" placeholder="Enter a value to store in a cookie">
+    <button onclick="handleSetCookie()">Set Cookie</button>
+    <p id="cookieDisplay"></p>
+  <div class="d-flex align-items-center">
+                <span class="mb-3 mb-md-0 text-muted"><span>&copy; 2023, Nagy Fouad </span>
+            </div>
+</body>
+</html>
