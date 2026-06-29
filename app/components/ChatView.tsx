@@ -147,8 +147,11 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
       <div className="relative z-10 flex-1 overflow-y-auto scrollbar-thin px-4 py-5 space-y-4 min-h-0">
         {messages.length === 0 && (
           <div className="text-center py-16 fade-up">
-            <div className="text-5xl mb-4">
-              {character.avatar.startsWith("http") ? "💬" : character.avatar}
+            <div className="text-5xl mb-4 w-16 h-16 mx-auto rounded-full overflow-hidden flex items-center justify-center bg-white/10">
+              {(character.avatar.startsWith("http") || character.avatar.startsWith("data:"))
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={character.avatar} alt="" className="w-full h-full object-cover" />
+                : character.avatar}
             </div>
             <p className="text-white font-semibold text-base">{character.name}</p>
             <p className="text-white/40 text-sm mt-1">Say hello to start the conversation</p>
