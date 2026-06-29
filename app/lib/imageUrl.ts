@@ -1,6 +1,7 @@
 export function resolveImageUrl(raw: string): string {
   const url = raw.trim();
   if (!url) return url;
+  if (url.startsWith("data:")) return url; // already a local data URL
 
   // drive.google.com/file/d/{id}/view  or  /file/d/{id}/
   const fileMatch = url.match(/drive\.google\.com\/file\/d\/([^/?#]+)/);
