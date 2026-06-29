@@ -18,7 +18,7 @@ function TypingIndicator({ avatar }: { avatar: string }) {
   return (
     <div className="flex items-end gap-2 fade-up">
       <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-sm flex-shrink-0 overflow-hidden">
-        {avatar.startsWith("http") || avatar.startsWith("data:")
+        {(avatar.startsWith("http") || avatar.startsWith("data:"))
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={avatar} alt="" className="w-full h-full object-cover" />
           : avatar}
@@ -44,13 +44,11 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  // Close menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
     function handler(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-        setConfirmDelete(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -82,28 +80,32 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
       <div className="absolute inset-0 chat-bg" style={bgStyle} />
       {isImageBg && <div className="absolute inset-0 bg-black/50" />}
 
-      {/* Header — z-20 so dropdown floats above the messages layer (z-10) */}
+      {/* Header */}
       <header className="relative z-20 flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-black/30 backdrop-blur-md pt-safe flex-shrink-0">
+        {/* Hamburger — only on mobile */}
         <button
           onClick={onOpenSidebar}
           className="w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white active:bg-white/10 transition-all flex-shrink-0 md:hidden"
         >☰</button>
 
+        {/* Avatar */}
         <div className="w-9 h-9 rounded-full flex items-center justify-center text-xl overflow-hidden bg-white/10 flex-shrink-0">
-          {character.avatar.startsWith("http") || character.avatar.startsWith("data:") ? (
+          {(character.avatar.startsWith("http") || character.avatar.startsWith("data:")) ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={character.avatar} alt={character.name} className="w-full h-full object-cover" />
           ) : character.avatar}
         </div>
 
+        {/* Name + personality */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white leading-tight">{character.name}</p>
           <p className="text-xs text-white/40 truncate leading-tight">{character.personality.slice(0, 50) || "AI Companion"}</p>
         </div>
 
+        {/* Menu */}
         <div className="relative flex-shrink-0" ref={menuRef}>
           <button
-            onClick={() => { setMenuOpen(v => !v); setConfirmDelete(false); }}
+            onClick={() => setMenuOpen(v => !v)}
             className="w-10 h-10 rounded-full hover:bg-white/10 active:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all text-xl"
           >⋮</button>
           {menuOpen && (
@@ -146,7 +148,7 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
         {messages.length === 0 && (
           <div className="text-center py-16 fade-up">
             <div className="text-5xl mb-4">
-              {character.avatar.startsWith("http") || character.avatar.startsWith("data:") ? "💬" : character.avatar}
+              {character.avatar.startsWith("http") ? "💬" : character.avatar}
             </div>
             <p className="text-white font-semibold text-base">{character.name}</p>
             <p className="text-white/40 text-sm mt-1">Say hello to start the conversation</p>
@@ -156,7 +158,7 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
           <div key={m.id} className={`flex items-end gap-2 fade-up ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
             {m.role === "model" && (
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 overflow-hidden bg-white/10 mb-0.5">
-                {character.avatar.startsWith("http") || character.avatar.startsWith("data:")
+                {(character.avatar.startsWith("http") || character.avatar.startsWith("data:"))
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={character.avatar} alt="" className="w-full h-full object-cover" />
                   : character.avatar}
@@ -198,6 +200,7 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
             value={input}
             onChange={e => {
               setInput(e.target.value);
+              // Auto-grow
               e.target.style.height = "auto";
               e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
             }}
