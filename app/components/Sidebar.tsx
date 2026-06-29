@@ -6,10 +6,11 @@ interface Props {
   activeId: string | null;
   onSelect: (id: string) => void;
   onCreate: () => void;
+  onGenerate: () => void;
   onClose: () => void;
 }
 
-export default function Sidebar({ characters, activeId, onSelect, onCreate, onClose }: Props) {
+export default function Sidebar({ characters, activeId, onSelect, onCreate, onGenerate, onClose }: Props) {
   return (
     <aside className="w-72 flex-shrink-0 bg-[#0e0e18] border-r border-white/8 flex flex-col h-full">
       {/* Header */}
@@ -25,6 +26,7 @@ export default function Sidebar({ characters, activeId, onSelect, onCreate, onCl
               className="w-9 h-9 rounded-full bg-gradient-to-br from-pink-600 to-purple-700 flex items-center justify-center text-white text-xl hover:opacity-90 transition-opacity shadow-lg shadow-pink-900/30"
               title="New character"
             >+</button>
+            {/* Close button — only visible on mobile */}
             <button
               onClick={onClose}
               className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center text-white/50 hover:text-white transition-colors md:hidden"
@@ -50,7 +52,7 @@ export default function Sidebar({ characters, activeId, onSelect, onCreate, onCl
             className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-all active:bg-white/10 hover:bg-white/5 ${activeId === c.id ? "bg-white/8 border-r-2 border-pink-500" : ""}`}
           >
             <div className="w-11 h-11 rounded-full flex items-center justify-center text-xl flex-shrink-0 overflow-hidden bg-white/5">
-              {c.avatar.startsWith("http") ? (
+              {c.avatar.startsWith("http") || c.avatar.startsWith("data:") ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={c.avatar} alt={c.name} className="w-full h-full object-cover" />
               ) : c.avatar}
@@ -63,7 +65,13 @@ export default function Sidebar({ characters, activeId, onSelect, onCreate, onCl
         ))}
       </div>
 
-      <div className="px-5 py-3 border-t border-white/8 pb-safe">
+      <div className="px-4 py-3 border-t border-white/8 pb-safe space-y-2">
+        <button
+          onClick={onGenerate}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm hover:bg-white/10 hover:text-white active:bg-white/15 transition-all"
+        >
+          <span>✨</span> Generate characters
+        </button>
         <p className="text-xs text-white/20 text-center">All data stays on your device</p>
       </div>
     </aside>

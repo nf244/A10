@@ -4,6 +4,7 @@ import { Character, Message } from "./types";
 import Sidebar from "./components/Sidebar";
 import ChatView from "./components/ChatView";
 import CharacterForm from "./components/CharacterForm";
+import GenerateModal from "./components/GenerateModal";
 
 function genId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -37,6 +38,7 @@ export default function Home() {
   const [showForm, setShowForm] = useState(false);
   const [editTarget, setEditTarget] = useState<Character | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showGenerate, setShowGenerate] = useState(false);
 
   useEffect(() => {
     const chars = loadCharacters();
@@ -50,6 +52,16 @@ export default function Home() {
   }, [activeId]);
 
   const activeChar = characters.find(c => c.id === activeId) ?? null;
+
+  const handleGenerateAdd = useCallback((generated: Omit<Character, "id" | "createdAt">[]) => {
+    const newChars = generated.map(data => ({ ...data, id: genId(), createdAt: Date.now() }));
+    const updated = [...characters, ...newChars];
+    setCharacters(updated);
+    saveCharacters(updated);
+    if (newChars.length > 0) setActiveId(newChars[newChars.length - 1].id);
+    setShowGenerate(false);
+    setSidebarOpen(false);
+  }, [characters]);
 
   const handleCreate = useCallback((data: Omit<Character, "id" | "createdAt">) => {
     const newChar: Character = { ...data, id: genId(), createdAt: Date.now() };
@@ -161,6 +173,7 @@ export default function Home() {
           activeId={activeId}
           onSelect={id => { setActiveId(id); setSidebarOpen(false); }}
           onCreate={() => { setEditTarget(null); setShowForm(true); setSidebarOpen(false); }}
+          onGenerate={() => { setShowGenerate(true); setSidebarOpen(false); }}
           onClose={() => setSidebarOpen(false)}
         />
       </div>
@@ -193,12 +206,20 @@ export default function Home() {
             <div className="text-6xl mb-6">💜</div>
             <h2 className="text-2xl font-bold text-white mb-2">Welcome to MuseChat</h2>
             <p className="text-white/40 max-w-xs mb-8 text-sm">Create your first AI companion and start an unforgettable conversation.</p>
-            <button
-              onClick={() => { setEditTarget(null); setShowForm(true); }}
-              className="px-6 py-3 rounded-full bg-gradient-to-r from-pink-600 to-purple-700 text-white font-medium hover:opacity-90 transition-opacity shadow-lg shadow-pink-900/30"
-            >
-              + Create a character
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => { setEditTarget(null); setShowForm(true); }}
+                className="px-6 py-3 rounded-full bg-gradient-to-r from-pink-600 to-purple-700 text-white font-medium hover:opacity-90 transition-opacity shadow-lg shadow-pink-900/30"
+              >
+                + Create a character
+              </button>
+              <button
+                onClick={() => setShowGenerate(true)}
+                className="px-6 py-3 rounded-full bg-white/8 border border-white/15 text-white/80 font-medium hover:bg-white/15 transition-all"
+              >
+                ✨ Generate characters
+              </button>
+            </div>
           </div>
         )}
       </main>
@@ -208,6 +229,13 @@ export default function Home() {
           initial={editTarget}
           onSave={editTarget ? handleEdit : handleCreate}
           onClose={() => { setShowForm(false); setEditTarget(null); }}
+        />
+      )}
+
+      {showGenerate && (
+        <GenerateModal
+          onAdd={handleGenerateAdd}
+          onClose={() => setShowGenerate(false)}
         />
       )}
     </div>
