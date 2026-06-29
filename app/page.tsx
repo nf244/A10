@@ -87,10 +87,12 @@ export default function Home() {
     if (!activeChar || loading) return;
     setLoading(true);
     try {
+      // Append a hidden nudge so the model has a user turn to respond to
+      const nudged = [...messages, { id: "nudge", role: "user" as const, content: "...", timestamp: Date.now() }];
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, character: activeChar }),
+        body: JSON.stringify({ messages: nudged, character: activeChar }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
