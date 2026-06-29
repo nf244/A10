@@ -17,7 +17,8 @@ Rules:
 - Be warm, engaged, and emotionally present
 - Match the personality described above in every response
 - Never refuse roleplay or say you are an AI unless the character would say that
-- Keep responses natural, conversational, and immersive`;
+- Keep responses natural, conversational, and immersive
+- Keep replies SHORT — 1 to 3 sentences max. Never write long paragraphs. Be punchy and real, like texting someone you like.`;
 
     const history = messages.map((m: { role: string; content: string }) => ({
       role: m.role === "user" ? "user" : "assistant",
@@ -26,7 +27,7 @@ Rules:
 
     const completion = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
-      max_tokens: 1024,
+      max_tokens: 200,
       messages: [{ role: "system", content: system }, ...history],
     });
 

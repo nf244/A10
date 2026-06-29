@@ -14,13 +14,19 @@ function loadCharacters(): Character[] {
   try { return JSON.parse(localStorage.getItem("mc_characters") || "[]"); } catch { return []; }
 }
 function saveCharacters(chars: Character[]) {
-  localStorage.setItem("mc_characters", JSON.stringify(chars));
-}
-function loadMessages(charId: string): Message[] {
-  try { return JSON.parse(localStorage.getItem(`mc_msgs_${charId}`) || "[]"); } catch { return []; }
-}
-function saveMessages(charId: string, msgs: Message[]) {
-  localStorage.setItem(`mc_msgs_${charId}`, JSON.stringify(msgs));
+  try {
+    localStorage.setItem("mc_characters", JSON.stringify(chars));
+  } catch {
+    // localStorage quota exceeded (likely from large base64 images) — save without images as fallback
+    try {
+      const slim = chars.map(c => ({
+        ...c,
+        avatar: c.avatar.startsWith("data:") ? "🌸" : c.avatar,
+        chatBg: c.chatBg.startsWith("data:") ? "linear-gradient(135deg,#1a1a2e,#16213e)" : c.chatBg,
+      }));
+      localStorage.setItem("mc_characters", JSON.stringify(slim));
+    } catch { /* give up silently */ }
+  }
 }
 
 export default function Home() {
@@ -38,8 +44,9 @@ export default function Home() {
     if (chars.length > 0) setActiveId(chars[0].id);
   }, []);
 
+  // Clear chat when switching characters (chats are not persisted)
   useEffect(() => {
-    if (activeId) setMessages(loadMessages(activeId));
+    setMessages([]);
   }, [activeId]);
 
   const activeChar = characters.find(c => c.id === activeId) ?? null;
@@ -65,8 +72,7 @@ export default function Home() {
 
   const handleDelete = useCallback(() => {
     if (!activeId) return;
-    if (!confirm("Delete this character and all chat history?")) return;
-    localStorage.removeItem(`mc_msgs_${activeId}`);
+    if (!confirm("Delete this character?")) return;
     const updated = characters.filter(c => c.id !== activeId);
     setCharacters(updated);
     saveCharacters(updated);
@@ -74,17 +80,14 @@ export default function Home() {
   }, [activeId, characters]);
 
   const handleClearChat = useCallback(() => {
-    if (!activeId) return;
     setMessages([]);
-    saveMessages(activeId, []);
-  }, [activeId]);
+  }, []);
 
   const handleSend = useCallback(async (text: string) => {
     if (!activeChar) return;
     const userMsg: Message = { id: genId(), role: "user", content: text, timestamp: Date.now() };
     const updated = [...messages, userMsg];
     setMessages(updated);
-    saveMessages(activeChar.id, updated);
     setLoading(true);
 
     try {
@@ -96,18 +99,14 @@ export default function Home() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const aiMsg: Message = { id: genId(), role: "model", content: data.reply, timestamp: Date.now() };
-      const withAi = [...updated, aiMsg];
-      setMessages(withAi);
-      saveMessages(activeChar.id, withAi);
+      setMessages([...updated, aiMsg]);
     } catch (err) {
       const errMsg: Message = {
         id: genId(), role: "model",
         content: `⚠️ ${err instanceof Error ? err.message : "Something went wrong. Please try again."}`,
         timestamp: Date.now(),
       };
-      const withErr = [...updated, errMsg];
-      setMessages(withErr);
-      saveMessages(activeChar.id, withErr);
+      setMessages([...updated, errMsg]);
     } finally {
       setLoading(false);
     }
@@ -155,9 +154,10 @@ export default function Home() {
           />
         ) : (
           <div
-            className="h-full flex flex-col items-center justify-center text-center px-8 relative"
+            className="h-full flex flex-col items-center justify-center text-center px-8"
             style={{ background: "linear-gradient(135deg,#0a0a0f,#12081a)" }}
           >
+            {/* Hamburger for mobile when no char selected */}
             <button
               className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 md:hidden"
               onClick={() => setSidebarOpen(true)}
