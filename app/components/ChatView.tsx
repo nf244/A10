@@ -18,7 +18,7 @@ function TypingIndicator({ avatar }: { avatar: string }) {
   return (
     <div className="flex items-end gap-2 fade-up">
       <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-sm flex-shrink-0 overflow-hidden">
-        {avatar.startsWith("http")
+        {avatar.startsWith("http") || avatar.startsWith("data:")
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={avatar} alt="" className="w-full h-full object-cover" />
           : avatar}
@@ -35,6 +35,7 @@ function TypingIndicator({ avatar }: { avatar: string }) {
 export default function ChatView({ character, messages, onSend, onContinue, onEdit, onDelete, onClearChat, onOpenSidebar, loading }: Props) {
   const [input, setInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -47,7 +48,10 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
   useEffect(() => {
     if (!menuOpen) return;
     function handler(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+        setConfirmDelete(false);
+      }
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -70,7 +74,7 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
 
   const isImageBg = character.chatBg.startsWith("http") || character.chatBg.startsWith("data:");
   const bgStyle = isImageBg
-    ? { backgroundImage: `url(${character.chatBg})` }
+    ? { backgroundImage: `url(${character.chatBg})`, backgroundSize: "cover", backgroundPosition: "center" }
     : { background: character.chatBg };
 
   return (
@@ -104,21 +108,39 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
         {/* Menu */}
         <div className="relative flex-shrink-0" ref={menuRef}>
           <button
-            onClick={() => setMenuOpen(v => !v)}
+            onClick={() => { setMenuOpen(v => !v); setConfirmDelete(false); }}
             className="w-10 h-10 rounded-full hover:bg-white/10 active:bg-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all text-xl"
           >⋮</button>
           {menuOpen && (
-            <div className="absolute right-0 top-12 w-48 bg-[#1a1a28] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
-              <button onClick={() => { onEdit(); setMenuOpen(false); }} className="w-full px-4 py-3.5 text-sm text-left text-white/80 hover:bg-white/10 active:bg-white/10 hover:text-white transition-all">
-                ✏️ Edit character
-              </button>
-              <button onClick={() => { onClearChat(); setMenuOpen(false); }} className="w-full px-4 py-3.5 text-sm text-left text-white/80 hover:bg-white/10 active:bg-white/10 hover:text-white transition-all">
-                🗑️ Clear chat
-              </button>
-              <div className="border-t border-white/10" />
-              <button onClick={() => { onDelete(); setMenuOpen(false); }} className="w-full px-4 py-3.5 text-sm text-left text-red-400 hover:bg-red-900/20 active:bg-red-900/20 transition-all">
-                ✕ Delete character
-              </button>
+            <div className="absolute right-0 top-12 w-52 bg-[#1a1a28] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50">
+              {confirmDelete ? (
+                <div className="px-4 py-3.5 space-y-2">
+                  <p className="text-xs text-white/60">Delete {character.name}?</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { onDelete(); setMenuOpen(false); setConfirmDelete(false); }}
+                      className="flex-1 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-500 transition-colors"
+                    >Delete</button>
+                    <button
+                      onClick={() => setConfirmDelete(false)}
+                      className="flex-1 py-1.5 rounded-lg bg-white/10 text-white/60 text-xs hover:bg-white/20 transition-colors"
+                    >Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button onClick={() => { onEdit(); setMenuOpen(false); }} className="w-full px-4 py-3.5 text-sm text-left text-white/80 hover:bg-white/10 active:bg-white/10 hover:text-white transition-all">
+                    ✏️ Edit character
+                  </button>
+                  <button onClick={() => { onClearChat(); setMenuOpen(false); }} className="w-full px-4 py-3.5 text-sm text-left text-white/80 hover:bg-white/10 active:bg-white/10 hover:text-white transition-all">
+                    🗑️ Clear chat
+                  </button>
+                  <div className="border-t border-white/10" />
+                  <button onClick={() => setConfirmDelete(true)} className="w-full px-4 py-3.5 text-sm text-left text-red-400 hover:bg-red-900/20 active:bg-red-900/20 transition-all">
+                    ✕ Delete character
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -181,7 +203,6 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
             value={input}
             onChange={e => {
               setInput(e.target.value);
-              // Auto-grow
               e.target.style.height = "auto";
               e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
             }}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Groq from "groq-sdk";
+import { addLog } from "../../lib/logs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -33,6 +34,19 @@ Rules:
     });
 
     const text = completion.choices[0].message.content ?? "";
+
+    addLog({
+      id: Math.random().toString(36).slice(2),
+      ts: Date.now(),
+      characterName: character.name,
+      systemPrompt: system,
+      userMessage: messages[messages.length - 1]?.content ?? "",
+      rawReply: text,
+      model: "llama-3.3-70b-versatile",
+      inputTokens: completion.usage?.prompt_tokens,
+      outputTokens: completion.usage?.completion_tokens,
+    });
+
     return NextResponse.json({ reply: text });
 
   } catch (err: unknown) {

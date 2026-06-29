@@ -18,7 +18,6 @@ function saveCharacters(chars: Character[]) {
   try {
     localStorage.setItem("mc_characters", JSON.stringify(chars));
   } catch {
-    // localStorage quota exceeded (likely from large base64 images) — save without images as fallback
     try {
       const slim = chars.map(c => ({
         ...c,
@@ -46,7 +45,6 @@ export default function Home() {
     if (chars.length > 0) setActiveId(chars[0].id);
   }, []);
 
-  // Clear chat when switching characters (chats are not persisted)
   useEffect(() => {
     setMessages([]);
   }, [activeId]);
@@ -84,7 +82,6 @@ export default function Home() {
 
   const handleDelete = useCallback(() => {
     if (!activeId) return;
-    if (!confirm("Delete this character?")) return;
     const updated = characters.filter(c => c.id !== activeId);
     setCharacters(updated);
     saveCharacters(updated);
@@ -99,7 +96,6 @@ export default function Home() {
     if (!activeChar || loading) return;
     setLoading(true);
     try {
-      // Append a hidden nudge so the model has a user turn to respond to
       const nudged = [...messages, { id: "nudge", role: "user" as const, content: "...", timestamp: Date.now() }];
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -154,7 +150,6 @@ export default function Home() {
   return (
     <div className="flex h-full" style={{ height: "100dvh" }}>
 
-      {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden"
@@ -162,7 +157,6 @@ export default function Home() {
         />
       )}
 
-      {/* Sidebar — overlay on mobile, static column on desktop */}
       <div className={`
         fixed inset-y-0 left-0 z-40 md:static md:z-auto md:flex
         transition-transform duration-250 ease-in-out
@@ -178,7 +172,6 @@ export default function Home() {
         />
       </div>
 
-      {/* Main content — always full-width on mobile */}
       <main className="flex-1 h-full overflow-hidden min-w-0">
         {activeChar ? (
           <ChatView
@@ -198,7 +191,6 @@ export default function Home() {
             className="h-full flex flex-col items-center justify-center text-center px-8"
             style={{ background: "linear-gradient(135deg,#0a0a0f,#12081a)" }}
           >
-            {/* Hamburger for mobile when no char selected */}
             <button
               className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 md:hidden"
               onClick={() => setSidebarOpen(true)}
