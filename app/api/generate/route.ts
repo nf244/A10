@@ -41,7 +41,7 @@ Return a JSON object with a "characters" array. Each character must have exactly
 - background: 2-3 sentences of rich backstory that makes them feel real
 - avatar: a single emoji that fits their vibe
 - chatBg: a CSS gradient fallback like "linear-gradient(135deg,#hex1,#hex2)"
-- searchQuery: a 5-8 word Google Images search for a beautiful, atmospheric, cinematic background photo that fits this character's world — e.g. "misty japanese garden night lanterns", "cozy library fireplace warm light", "neon cyberpunk city rain night", "sunset desert dunes golden hour"
+- searchQuery: a 5-8 word Google Images search for a sexy background photo that fits this characte — e.g. "sexy teacher", "hot naughty friend", "busty stepmom"
 
 Return only valid JSON. No markdown, no extra text.`;
 
