@@ -6,6 +6,7 @@ interface Props {
   character: Character;
   messages: Message[];
   onSend: (text: string) => void;
+  onContinue: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onClearChat: () => void;
@@ -31,7 +32,7 @@ function TypingIndicator({ avatar }: { avatar: string }) {
   );
 }
 
-export default function ChatView({ character, messages, onSend, onEdit, onDelete, onClearChat, onOpenSidebar, loading }: Props) {
+export default function ChatView({ character, messages, onSend, onContinue, onEdit, onDelete, onClearChat, onOpenSidebar, loading }: Props) {
   const [input, setInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -42,6 +43,7 @@ export default function ChatView({ character, messages, onSend, onEdit, onDelete
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  // Close menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
     function handler(e: MouseEvent) {
@@ -55,9 +57,6 @@ export default function ChatView({ character, messages, onSend, onEdit, onDelete
     const text = input.trim();
     if (!text || loading) return;
     setInput("");
-    if (inputRef.current) {
-      inputRef.current.style.height = "auto";
-    }
     onSend(text);
     setTimeout(() => inputRef.current?.focus(), 50);
   }
@@ -69,35 +68,40 @@ export default function ChatView({ character, messages, onSend, onEdit, onDelete
     }
   }
 
-  const isImageBg = character.chatBg.startsWith("http");
+  const isImageBg = character.chatBg.startsWith("http") || character.chatBg.startsWith("data:");
   const bgStyle = isImageBg
     ? { backgroundImage: `url(${character.chatBg})` }
     : { background: character.chatBg };
 
   return (
     <div className="flex flex-col relative" style={{ height: "100dvh" }}>
+      {/* Background */}
       <div className="absolute inset-0 chat-bg" style={bgStyle} />
       {isImageBg && <div className="absolute inset-0 bg-black/50" />}
 
       {/* Header */}
       <header className="relative z-10 flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-black/30 backdrop-blur-md pt-safe flex-shrink-0">
+        {/* Hamburger — only on mobile */}
         <button
           onClick={onOpenSidebar}
           className="w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white active:bg-white/10 transition-all flex-shrink-0 md:hidden"
         >☰</button>
 
+        {/* Avatar */}
         <div className="w-9 h-9 rounded-full flex items-center justify-center text-xl overflow-hidden bg-white/10 flex-shrink-0">
-          {character.avatar.startsWith("http") ? (
+          {character.avatar.startsWith("http") || character.avatar.startsWith("data:") ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={character.avatar} alt={character.name} className="w-full h-full object-cover" />
           ) : character.avatar}
         </div>
 
+        {/* Name + personality */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white leading-tight">{character.name}</p>
           <p className="text-xs text-white/40 truncate leading-tight">{character.personality.slice(0, 50) || "AI Companion"}</p>
         </div>
 
+        {/* Menu */}
         <div className="relative flex-shrink-0" ref={menuRef}>
           <button
             onClick={() => setMenuOpen(v => !v)}
@@ -125,7 +129,7 @@ export default function ChatView({ character, messages, onSend, onEdit, onDelete
         {messages.length === 0 && (
           <div className="text-center py-16 fade-up">
             <div className="text-5xl mb-4">
-              {character.avatar.startsWith("http") ? "💬" : character.avatar}
+              {character.avatar.startsWith("http") || character.avatar.startsWith("data:") ? "💬" : character.avatar}
             </div>
             <p className="text-white font-semibold text-base">{character.name}</p>
             <p className="text-white/40 text-sm mt-1">Say hello to start the conversation</p>
@@ -135,7 +139,7 @@ export default function ChatView({ character, messages, onSend, onEdit, onDelete
           <div key={m.id} className={`flex items-end gap-2 fade-up ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
             {m.role === "model" && (
               <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 overflow-hidden bg-white/10 mb-0.5">
-                {character.avatar.startsWith("http")
+                {character.avatar.startsWith("http") || character.avatar.startsWith("data:")
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={character.avatar} alt="" className="w-full h-full object-cover" />
                   : character.avatar}
@@ -156,6 +160,18 @@ export default function ChatView({ character, messages, onSend, onEdit, onDelete
         <div ref={bottomRef} />
       </div>
 
+      {/* Continue button */}
+      {messages.length > 0 && !loading && (
+        <div className="relative z-10 flex justify-center pb-1">
+          <button
+            onClick={onContinue}
+            className="px-4 py-1.5 rounded-full bg-white/8 border border-white/15 text-white/50 text-xs hover:bg-white/15 hover:text-white/80 active:scale-95 transition-all"
+          >
+            ✦ Continue
+          </button>
+        </div>
+      )}
+
       {/* Input bar */}
       <div className="relative z-10 px-3 pt-2 pb-2 border-t border-white/10 bg-black/30 backdrop-blur-md flex-shrink-0 pb-safe">
         <div className="flex items-end gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 focus-within:border-pink-500/40 transition-colors">
@@ -165,6 +181,7 @@ export default function ChatView({ character, messages, onSend, onEdit, onDelete
             value={input}
             onChange={e => {
               setInput(e.target.value);
+              // Auto-grow
               e.target.style.height = "auto";
               e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
             }}

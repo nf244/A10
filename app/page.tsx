@@ -83,6 +83,31 @@ export default function Home() {
     setMessages([]);
   }, []);
 
+  const handleContinue = useCallback(async () => {
+    if (!activeChar || loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, character: activeChar }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      const aiMsg: Message = { id: genId(), role: "model", content: data.reply, timestamp: Date.now() };
+      setMessages(prev => [...prev, aiMsg]);
+    } catch (err) {
+      const errMsg: Message = {
+        id: genId(), role: "model",
+        content: `⚠️ ${err instanceof Error ? err.message : "Something went wrong. Please try again."}`,
+        timestamp: Date.now(),
+      };
+      setMessages(prev => [...prev, errMsg]);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeChar, messages, loading]);
+
   const handleSend = useCallback(async (text: string) => {
     if (!activeChar) return;
     const userMsg: Message = { id: genId(), role: "user", content: text, timestamp: Date.now() };
@@ -146,6 +171,7 @@ export default function Home() {
             character={activeChar}
             messages={messages}
             onSend={handleSend}
+            onContinue={handleContinue}
             onEdit={() => { setEditTarget(activeChar); setShowForm(true); }}
             onDelete={handleDelete}
             onClearChat={handleClearChat}
