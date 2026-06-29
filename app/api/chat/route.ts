@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import Groq from "groq-sdk";
 
 export async function POST(req: NextRequest) {
   try {
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY ?? "" });
     const { messages, character } = await req.json();
 
     const system = `You are ${character.name}. Stay in character at all times.
@@ -23,16 +22,15 @@ Rules:
     const history = messages.map((m: { role: string; content: string }) => ({
       role: m.role === "user" ? "user" : "assistant",
       content: m.content,
-    })) as Anthropic.MessageParam[];
+    }));
 
-    const response = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
+    const completion = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
       max_tokens: 1024,
-      system,
-      messages: history,
+      messages: [{ role: "system", content: system }, ...history],
     });
 
-    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    const text = completion.choices[0].message.content ?? "";
     return NextResponse.json({ reply: text });
 
   } catch (err: unknown) {
@@ -40,12 +38,10 @@ Rules:
     const raw = err instanceof Error ? err.message : String(err);
 
     let friendly = raw;
-    if (raw.includes("429") || raw.includes("rate_limit") || raw.includes("overloaded")) {
+    if (raw.includes("429") || raw.includes("rate_limit")) {
       friendly = "Rate limit hit — wait a moment and try again.";
-    } else if (raw.includes("401") || raw.includes("authentication") || raw.includes("invalid x-api-key")) {
-      friendly = "Invalid API key. Set a valid ANTHROPIC_API_KEY (starts with sk-ant-…) in your Vercel project settings at console.anthropic.com.";
-    } else if (raw.includes("credit") || raw.includes("billing")) {
-      friendly = "No API credits remaining. Add billing at console.anthropic.com.";
+    } else if (raw.includes("401") || raw.includes("auth") || raw.includes("api_key")) {
+      friendly = "Invalid Groq API key. Check GROQ_API_KEY in your Vercel settings.";
     }
 
     const status = raw.includes("429") ? 429 : raw.includes("401") ? 401 : 500;
