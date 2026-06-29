@@ -44,7 +44,6 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  // Close menu on outside click
   useEffect(() => {
     if (!menuOpen) return;
     function handler(e: MouseEvent) {
@@ -83,15 +82,13 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
       <div className="absolute inset-0 chat-bg" style={bgStyle} />
       {isImageBg && <div className="absolute inset-0 bg-black/50" />}
 
-      {/* Header */}
-      <header className="relative z-10 flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-black/30 backdrop-blur-md pt-safe flex-shrink-0">
-        {/* Hamburger — only on mobile */}
+      {/* Header — z-20 so dropdown floats above the messages layer (z-10) */}
+      <header className="relative z-20 flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-black/30 backdrop-blur-md pt-safe flex-shrink-0">
         <button
           onClick={onOpenSidebar}
           className="w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white active:bg-white/10 transition-all flex-shrink-0 md:hidden"
         >☰</button>
 
-        {/* Avatar */}
         <div className="w-9 h-9 rounded-full flex items-center justify-center text-xl overflow-hidden bg-white/10 flex-shrink-0">
           {character.avatar.startsWith("http") || character.avatar.startsWith("data:") ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -99,13 +96,11 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
           ) : character.avatar}
         </div>
 
-        {/* Name + personality */}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-white leading-tight">{character.name}</p>
           <p className="text-xs text-white/40 truncate leading-tight">{character.personality.slice(0, 50) || "AI Companion"}</p>
         </div>
 
-        {/* Menu */}
         <div className="relative flex-shrink-0" ref={menuRef}>
           <button
             onClick={() => { setMenuOpen(v => !v); setConfirmDelete(false); }}
