@@ -18,9 +18,31 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore("messages");
       }
     };
-    req.onsuccess = () => { _db = req.result; resolve(req.result); };
+    req.onsuccess = () => {
+      _db = req.result;
+      // Ask browser to never auto-evict this data
+      navigator.storage?.persist?.();
+      resolve(req.result);
+    };
     req.onerror = () => reject(req.error);
   });
+}
+
+// localStorage backup: saves metadata only (no large base64 images)
+// This ensures characters survive even if IndexedDB is cleared
+function saveBackup(chars: Character[]) {
+  try {
+    const lite = chars.map(c => ({
+      ...c,
+      avatar: c.avatar.startsWith("data:") ? "🌸" : c.avatar,
+      chatBg: c.chatBg.startsWith("data:") ? "linear-gradient(135deg,#1a1a2e,#16213e)" : c.chatBg,
+    }));
+    localStorage.setItem("mc_backup", JSON.stringify(lite));
+  } catch { /* ignore quota errors */ }
+}
+
+function loadBackup(): Character[] {
+  try { return JSON.parse(localStorage.getItem("mc_backup") || "[]"); } catch { return []; }
 }
 
 export async function dbGetCharacters(): Promise<Character[]> {
@@ -31,34 +53,40 @@ export async function dbGetCharacters(): Promise<Character[]> {
     req.onerror = () => reject(req.error);
   });
 
-  // One-time migration from localStorage
-  if (chars.length === 0) {
-    try {
-      const raw = localStorage.getItem("mc_characters");
-      if (raw) {
-        const legacy = JSON.parse(raw) as Character[];
-        if (legacy.length > 0) {
-          await dbPutCharacters(legacy);
-          // Migrate messages for each character
-          for (const c of legacy) {
-            const msgs = localStorage.getItem(`mc_msgs_${c.id}`);
-            if (msgs) {
-              const parsed = JSON.parse(msgs) as Message[];
-              await dbPutMessages(c.id, parsed);
-              localStorage.removeItem(`mc_msgs_${c.id}`);
-            }
+  if (chars.length > 0) return chars;
+
+  // IndexedDB is empty — try migrating from old localStorage format
+  try {
+    const raw = localStorage.getItem("mc_characters");
+    if (raw) {
+      const legacy = JSON.parse(raw) as Character[];
+      if (legacy.length > 0) {
+        await dbPutCharacters(legacy);
+        for (const c of legacy) {
+          const msgs = localStorage.getItem(`mc_msgs_${c.id}`);
+          if (msgs) {
+            await dbPutMessages(c.id, JSON.parse(msgs) as Message[]);
+            localStorage.removeItem(`mc_msgs_${c.id}`);
           }
-          localStorage.removeItem("mc_characters");
-          return legacy.sort((a, b) => a.createdAt - b.createdAt);
         }
+        localStorage.removeItem("mc_characters");
+        return legacy.sort((a, b) => a.createdAt - b.createdAt);
       }
-    } catch { /* ignore migration errors */ }
+    }
+  } catch { /* ignore */ }
+
+  // Last resort: recover from metadata backup
+  const backup = loadBackup();
+  if (backup.length > 0) {
+    await dbPutCharacters(backup);
+    return backup;
   }
 
-  return chars;
+  return [];
 }
 
 export async function dbPutCharacters(chars: Character[]): Promise<void> {
+  saveBackup(chars); // Always keep a metadata backup in localStorage
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction("characters", "readwrite");
