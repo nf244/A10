@@ -18,6 +18,7 @@ function saveCharacters(chars: Character[]) {
   try {
     localStorage.setItem("mc_characters", JSON.stringify(chars));
   } catch {
+    // localStorage quota exceeded (likely from large base64 images) — save without images as fallback
     try {
       const slim = chars.map(c => ({
         ...c,
@@ -27,6 +28,21 @@ function saveCharacters(chars: Character[]) {
       localStorage.setItem("mc_characters", JSON.stringify(slim));
     } catch { /* give up silently */ }
   }
+}
+
+const MAX_STORED_MESSAGES = 200;
+function loadMessages(characterId: string): Message[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem(`mc_msgs_${characterId}`) || "[]"); } catch { return []; }
+}
+function saveMessages(characterId: string, msgs: Message[]) {
+  try {
+    const trimmed = msgs.slice(-MAX_STORED_MESSAGES);
+    localStorage.setItem(`mc_msgs_${characterId}`, JSON.stringify(trimmed));
+  } catch { /* quota exceeded — skip silently */ }
+}
+function clearMessages(characterId: string) {
+  try { localStorage.removeItem(`mc_msgs_${characterId}`); } catch { /* ignore */ }
 }
 
 export default function Home() {
@@ -45,8 +61,13 @@ export default function Home() {
     if (chars.length > 0) setActiveId(chars[0].id);
   }, []);
 
+  // Load persisted messages when switching characters
   useEffect(() => {
-    setMessages([]);
+    if (activeId) {
+      setMessages(loadMessages(activeId));
+    } else {
+      setMessages([]);
+    }
   }, [activeId]);
 
   const activeChar = characters.find(c => c.id === activeId) ?? null;
@@ -82,6 +103,7 @@ export default function Home() {
 
   const handleDelete = useCallback(() => {
     if (!activeId) return;
+    clearMessages(activeId);
     const updated = characters.filter(c => c.id !== activeId);
     setCharacters(updated);
     saveCharacters(updated);
@@ -89,8 +111,9 @@ export default function Home() {
   }, [activeId, characters]);
 
   const handleClearChat = useCallback(() => {
+    if (activeId) clearMessages(activeId);
     setMessages([]);
-  }, []);
+  }, [activeId]);
 
   const handleContinue = useCallback(async () => {
     if (!activeChar || loading) return;
@@ -105,7 +128,11 @@ export default function Home() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const aiMsg: Message = { id: genId(), role: "model", content: data.reply, timestamp: Date.now() };
-      setMessages(prev => [...prev, aiMsg]);
+      setMessages(prev => {
+        const next = [...prev, aiMsg];
+        saveMessages(activeChar.id, next);
+        return next;
+      });
     } catch (err) {
       const errMsg: Message = {
         id: genId(), role: "model",
@@ -123,6 +150,7 @@ export default function Home() {
     const userMsg: Message = { id: genId(), role: "user", content: text, timestamp: Date.now() };
     const updated = [...messages, userMsg];
     setMessages(updated);
+    saveMessages(activeChar.id, updated);
     setLoading(true);
 
     try {
@@ -134,7 +162,9 @@ export default function Home() {
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const aiMsg: Message = { id: genId(), role: "model", content: data.reply, timestamp: Date.now() };
-      setMessages([...updated, aiMsg]);
+      const withReply = [...updated, aiMsg];
+      setMessages(withReply);
+      saveMessages(activeChar.id, withReply);
     } catch (err) {
       const errMsg: Message = {
         id: genId(), role: "model",
@@ -150,6 +180,7 @@ export default function Home() {
   return (
     <div className="flex h-full" style={{ height: "100dvh" }}>
 
+      {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden"
@@ -157,6 +188,7 @@ export default function Home() {
         />
       )}
 
+      {/* Sidebar — overlay on mobile, static column on desktop */}
       <div className={`
         fixed inset-y-0 left-0 z-40 md:static md:z-auto md:flex
         transition-transform duration-250 ease-in-out
@@ -172,6 +204,7 @@ export default function Home() {
         />
       </div>
 
+      {/* Main content — always full-width on mobile */}
       <main className="flex-1 h-full overflow-hidden min-w-0">
         {activeChar ? (
           <ChatView
@@ -191,6 +224,7 @@ export default function Home() {
             className="h-full flex flex-col items-center justify-center text-center px-8"
             style={{ background: "linear-gradient(135deg,#0a0a0f,#12081a)" }}
           >
+            {/* Hamburger for mobile when no char selected */}
             <button
               className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 md:hidden"
               onClick={() => setSidebarOpen(true)}
@@ -198,20 +232,12 @@ export default function Home() {
             <div className="text-6xl mb-6">💜</div>
             <h2 className="text-2xl font-bold text-white mb-2">Welcome to MuseChat</h2>
             <p className="text-white/40 max-w-xs mb-8 text-sm">Create your first AI companion and start an unforgettable conversation.</p>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={() => { setEditTarget(null); setShowForm(true); }}
-                className="px-6 py-3 rounded-full bg-gradient-to-r from-pink-600 to-purple-700 text-white font-medium hover:opacity-90 transition-opacity shadow-lg shadow-pink-900/30"
-              >
-                + Create a character
-              </button>
-              <button
-                onClick={() => setShowGenerate(true)}
-                className="px-6 py-3 rounded-full bg-white/8 border border-white/15 text-white/80 font-medium hover:bg-white/15 transition-all"
-              >
-                ✨ Generate characters
-              </button>
-            </div>
+            <button
+              onClick={() => { setEditTarget(null); setShowForm(true); }}
+              className="px-6 py-3 rounded-full bg-gradient-to-r from-pink-600 to-purple-700 text-white font-medium hover:opacity-90 transition-opacity shadow-lg shadow-pink-900/30"
+            >
+              + Create a character
+            </button>
           </div>
         )}
       </main>
