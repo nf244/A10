@@ -174,8 +174,9 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
 
   const isImageBg = character.chatBg.startsWith("http") || character.chatBg.startsWith("data:");
   const bgStyle = isImageBg
-    ? { backgroundImage: `url(${character.chatBg})`, backgroundSize: "cover", backgroundPosition: "center" }
+    ? { backgroundImage: `url(${character.chatBg})`, backgroundSize: "cover", backgroundPosition: character.chatBgPos ?? "center" }
     : { background: character.chatBg };
+  const avatarDisplay = character.avatar === "@bg" ? character.chatBg : character.avatar;
 
   return (
     <div
@@ -186,7 +187,7 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
     >
       {/* Background */}
       <div className="absolute inset-0 chat-bg" style={bgStyle} />
-      {isImageBg && <div className="absolute inset-0 bg-black/50" />}
+      {isImageBg && <div className={`absolute inset-0 bg-black/50 transition-opacity duration-300 ${bgView ? "opacity-0" : "opacity-100"}`} />}
 
       {/* Full-screen bg view overlay */}
       {bgView && (
@@ -213,10 +214,10 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
 
         {/* Avatar */}
         <div className="w-9 h-9 rounded-full flex items-center justify-center text-xl overflow-hidden bg-white/10 flex-shrink-0">
-          {(character.avatar.startsWith("http") || character.avatar.startsWith("data:")) ? (
+          {(avatarDisplay.startsWith("http") || avatarDisplay.startsWith("data:")) ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={character.avatar} alt={character.name} className="w-full h-full object-cover" />
-          ) : character.avatar}
+            <img src={avatarDisplay} alt={character.name} className="w-full h-full object-cover" />
+          ) : avatarDisplay}
         </div>
 
         {/* Name + personality */}
@@ -271,10 +272,10 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
         {messages.length === 0 && (
           <div className="text-center py-16 fade-up">
             <div className="text-5xl mb-4 w-16 h-16 mx-auto rounded-full overflow-hidden flex items-center justify-center bg-white/10">
-              {(character.avatar.startsWith("http") || character.avatar.startsWith("data:"))
+              {(avatarDisplay.startsWith("http") || avatarDisplay.startsWith("data:"))
                 // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={character.avatar} alt="" className="w-full h-full object-cover" />
-                : character.avatar}
+                ? <img src={avatarDisplay} alt="" className="w-full h-full object-cover" />
+                : avatarDisplay}
             </div>
             <p className="text-white font-semibold text-base">{character.name}</p>
             <p className="text-white/40 text-sm mt-1">Say hello to start the conversation</p>
@@ -284,11 +285,11 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
           <MessageBubble
             key={m.id}
             m={m}
-            avatar={character.avatar}
+            avatar={avatarDisplay}
             onDelete={() => onDeleteMessage(m.id)}
           />
         ))}
-        {loading && <TypingIndicator avatar={character.avatar} />}
+        {loading && <TypingIndicator avatar={avatarDisplay} />}
         <div ref={bottomRef} />
       </div>
 

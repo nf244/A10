@@ -52,10 +52,13 @@ export default function Sidebar({ characters, activeId, onSelect, onCreate, onGe
             className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-all active:bg-white/10 hover:bg-white/5 ${activeId === c.id ? "bg-white/8 border-r-2 border-pink-500" : ""}`}
           >
             <div className="w-11 h-11 rounded-full flex items-center justify-center text-xl flex-shrink-0 overflow-hidden bg-white/5">
-              {c.avatar.startsWith("http") ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={c.avatar} alt={c.name} className="w-full h-full object-cover" />
-              ) : c.avatar}
+              {(() => {
+                const av = c.avatar === "@bg" ? c.chatBg : c.avatar;
+                return (av.startsWith("http") || av.startsWith("data:"))
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={av} alt={c.name} className="w-full h-full object-cover" />
+                  : av;
+              })()}
             </div>
             <div className="min-w-0">
               <p className="text-sm font-medium text-white truncate">{c.name}</p>

@@ -11,19 +11,13 @@ function genId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-// Merge server chars with local: server is source of truth for metadata,
-// but local may have base64 images that the server strips — restore them.
+// Server is now the source of truth (stores full images). Use server data
+// directly; only fall back to local if server returned nothing.
 function mergeChars(server: Character[], local: Character[]): Character[] {
-  const localMap = new Map(local.map(c => [c.id, c]));
-  return server.map(sc => {
-    const lc = localMap.get(sc.id);
-    if (!lc) return sc;
-    return {
-      ...sc,
-      avatar: sc.avatar === "🌸" && lc.avatar.startsWith("data:") ? lc.avatar : sc.avatar,
-      chatBg: sc.chatBg.startsWith("linear-gradient") && lc.chatBg.startsWith("data:") ? lc.chatBg : sc.chatBg,
-    };
-  });
+  // Prefer server, but keep any local-only chars (not yet synced)
+  const serverIds = new Set(server.map(c => c.id));
+  const localOnly = local.filter(c => !serverIds.has(c.id));
+  return [...server, ...localOnly];
 }
 
 async function serverGetChars(): Promise<Character[] | null> {

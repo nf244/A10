@@ -1,23 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { kvGet, kvSet, isConfigured } from "../../../lib/redis";
+import { kvGet, kvGetMany, kvSet, kvSetLarge, kvDel, kvDelMany, isConfigured } from "../../../lib/redis";
 import type { Character } from "../../../types";
 
-const KEY = "musechat:chars";
-
-// Strip large data: URLs before storing — only keep http(s) URLs and emojis
-function stripImages(chars: Character[]): Character[] {
-  return chars.map(c => ({
-    ...c,
-    avatar: c.avatar.startsWith("data:") ? "🌸" : c.avatar,
-    chatBg: c.chatBg.startsWith("data:") ? "linear-gradient(135deg,#1a1a2e,#16213e)" : c.chatBg,
-  }));
-}
+const INDEX_KEY = "musechat:chars";
+const charKey = (id: string) => `musechat:char:${id}`;
 
 export async function GET() {
   if (!isConfigured()) return NextResponse.json({ chars: null });
   try {
-    const chars = await kvGet<Character[]>(KEY);
-    return NextResponse.json({ chars });
+    const ids = await kvGet<string[]>(INDEX_KEY);
+    if (!ids || ids.length === 0) return NextResponse.json({ chars: null });
+    const chars = await kvGetMany<Character>(ids.map(charKey));
+    const valid = chars.filter((c): c is Character => c !== null);
+    return NextResponse.json({ chars: valid.length > 0 ? valid : null });
   } catch {
     return NextResponse.json({ chars: null });
   }
@@ -27,7 +22,33 @@ export async function POST(req: NextRequest) {
   if (!isConfigured()) return NextResponse.json({ ok: false });
   try {
     const { chars } = await req.json() as { chars: Character[] };
-    await kvSet(KEY, stripImages(chars));
+    const newIds = chars.map(c => c.id);
+    const newIdSet = new Set(newIds);
+
+    // Clean up deleted characters
+    const existingIds = await kvGet<string[]>(INDEX_KEY) ?? [];
+    const deletedIds = existingIds.filter(id => !newIdSet.has(id));
+    if (deletedIds.length > 0) await kvDelMany(deletedIds.map(charKey));
+
+    // Save index
+    await kvSet(INDEX_KEY, newIds);
+
+    // Save each character individually using a direct POST (avoids pipeline
+    // body-size limits when chatBg or avatar contains a large base64 image)
+    await Promise.all(chars.map(c => kvSetLarge(charKey(c.id), c)));
+
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  if (!isConfigured()) return NextResponse.json({ ok: false });
+  try {
+    const ids = await kvGet<string[]>(INDEX_KEY) ?? [];
+    await kvDelMany(ids.map(charKey));
+    await kvDel(INDEX_KEY);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ ok: false }, { status: 500 });

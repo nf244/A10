@@ -16,7 +16,6 @@ const GRADIENTS = [
 
 const EMOJIS = ["🌸","💜","🔥","❄️","🌙","⭐","🌹","💫","🦋","🐉","🌺","💎","🌊","🍃","🌙","😈"];
 
-// Resize image file → base64 data URL via canvas
 function readImageFile(file: File, maxW: number, maxH: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -56,6 +55,49 @@ function extractImageFromDrop(e: React.DragEvent): File | null {
   return null;
 }
 
+// Drag-to-reposition picker — shows image and lets user tap/drag the focal point
+function BgPositionPicker({ src, position, onChange }: {
+  src: string;
+  position: string;
+  onChange: (pos: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+
+  function pick(clientX: number, clientY: number) {
+    const rect = ref.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
+    const y = Math.max(0, Math.min(100, Math.round(((clientY - rect.top) / rect.height) * 100)));
+    onChange(`${x}% ${y}%`);
+  }
+
+  const [px, py] = position.replace(/%/g, "").split(" ").map(Number);
+
+  return (
+    <div
+      ref={ref}
+      className="relative w-full h-32 rounded-xl overflow-hidden cursor-crosshair select-none touch-none"
+      style={{ backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: position }}
+      onMouseDown={e => { dragging.current = true; pick(e.clientX, e.clientY); }}
+      onMouseMove={e => { if (dragging.current) pick(e.clientX, e.clientY); }}
+      onMouseUp={() => { dragging.current = false; }}
+      onMouseLeave={() => { dragging.current = false; }}
+      onTouchStart={e => pick(e.touches[0].clientX, e.touches[0].clientY)}
+      onTouchMove={e => { e.preventDefault(); pick(e.touches[0].clientX, e.touches[0].clientY); }}
+    >
+      <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+      <div
+        className="absolute w-5 h-5 rounded-full border-2 border-white bg-white/40 shadow-lg pointer-events-none"
+        style={{ left: `${px}%`, top: `${py}%`, transform: "translate(-50%, -50%)" }}
+      />
+      <p className="absolute bottom-2 inset-x-0 text-center text-xs text-white/60 pointer-events-none">
+        Drag to reposition
+      </p>
+    </div>
+  );
+}
+
 interface ImageInputProps {
   value: string;
   onChange: (v: string) => void;
@@ -63,7 +105,7 @@ interface ImageInputProps {
   maxH: number;
   placeholder?: string;
   label: string;
-  preview?: React.ReactNode; // custom preview element
+  preview?: React.ReactNode;
 }
 
 function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }: ImageInputProps) {
@@ -80,8 +122,7 @@ function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }
     if (!file) return;
     setProcessing(true);
     try {
-      const dataUrl = await readImageFile(file, maxW, maxH);
-      onChange(dataUrl);
+      onChange(await readImageFile(file, maxW, maxH));
     } catch { /* ignore */ }
     finally { setProcessing(false); }
   }
@@ -101,9 +142,7 @@ function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }
 
   return (
     <div className="space-y-2">
-      <label className="text-xs font-medium text-white/50 uppercase tracking-wider block">{label}</label>
-
-      {/* Drop / paste zone */}
+      {label && <label className="text-xs font-medium text-white/50 uppercase tracking-wider block">{label}</label>}
       <div
         onDragOver={e => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
@@ -117,34 +156,20 @@ function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }
         {processing ? (
           <p className="text-xs text-white/50">Processing…</p>
         ) : value ? (
-          <>
-            {preview}
-            <p className="text-xs text-white/40">Click, paste, or drop to replace</p>
-          </>
+          <>{preview}<p className="text-xs text-white/40">Click, paste, or drop to replace</p></>
         ) : (
           <>
             <span className="text-2xl">🖼️</span>
-            <p className="text-xs text-white/50 text-center px-4">
-              Click to browse · Paste (Ctrl/⌘+V) · or drag & drop
-            </p>
+            <p className="text-xs text-white/50 text-center px-4">Click to browse · Paste (Ctrl/⌘+V) · or drag & drop</p>
           </>
         )}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={e => processFile(e.target.files?.[0] ?? null)}
-        />
+        <input ref={fileRef} type="file" accept="image/*" className="hidden"
+          onChange={e => processFile(e.target.files?.[0] ?? null)} />
       </div>
 
-      {/* URL fallback */}
       <div className="relative">
         <input
-          type="url"
-          inputMode="url"
-          autoCapitalize="none"
-          autoCorrect="off"
+          type="url" inputMode="url" autoCapitalize="none" autoCorrect="off"
           placeholder={placeholder ?? "Or paste a URL…"}
           value={isData ? "" : value}
           onChange={e => onChange(e.target.value)}
@@ -153,22 +178,16 @@ function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }
           style={{ fontSize: "16px" }}
         />
         {value && (
-          <button
-            onClick={() => onChange("")}
-            className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/40 hover:text-white text-xs transition-all"
-          >✕</button>
+          <button onClick={() => onChange("")}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/40 hover:text-white text-xs transition-all">
+            ✕
+          </button>
         )}
       </div>
 
-      {wasConverted && (
-        <p className="text-xs text-emerald-400/80">✓ Google Drive link converted to direct URL</p>
-      )}
-      {isPhotos && (
-        <p className="text-xs text-amber-400/80">⚠ Google Photos links don&apos;t work — use Drive instead</p>
-      )}
-      {isData && (
-        <p className="text-xs text-white/30">✓ Image stored locally</p>
-      )}
+      {wasConverted && <p className="text-xs text-emerald-400/80">✓ Google Drive link converted</p>}
+      {isPhotos && <p className="text-xs text-amber-400/80">⚠ Google Photos links don&apos;t work — use Drive instead</p>}
+      {isData && <p className="text-xs text-white/30">✓ Image stored locally</p>}
     </div>
   );
 }
@@ -183,22 +202,32 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
   const [personality, setPersonality] = useState(initial?.personality ?? "");
   const [background, setBackground] = useState(initial?.background ?? "");
-  const [avatar, setAvatar] = useState(initial?.avatar ?? "🌸");
+  const [avatar, setAvatar] = useState(
+    initial?.avatar && !initial.avatar.startsWith("http") && !initial.avatar.startsWith("data:") && initial.avatar !== "@bg"
+      ? initial.avatar : "🌸"
+  );
   const [chatBg, setChatBg] = useState(initial?.chatBg ?? GRADIENTS[0]);
-  const [avatarSrc, setAvatarSrc] = useState(initial?.avatar?.startsWith("http") || initial?.avatar?.startsWith("data:") ? initial.avatar : "");
-  const [bgSrc, setBgSrc] = useState(initial?.chatBg?.startsWith("http") || initial?.chatBg?.startsWith("data:") ? initial.chatBg : "");
+  const [chatBgPos, setChatBgPos] = useState(initial?.chatBgPos ?? "50% 40%");
+  const [avatarSrc, setAvatarSrc] = useState(
+    initial?.avatar === "@bg" ? "@bg" :
+    (initial?.avatar?.startsWith("http") || initial?.avatar?.startsWith("data:") ? initial.avatar : "")
+  );
+  const [bgSrc, setBgSrc] = useState(
+    initial?.chatBg?.startsWith("http") || initial?.chatBg?.startsWith("data:") ? initial.chatBg : ""
+  );
   const [bgTab, setBgTab] = useState<"gradient" | "image">(
     initial?.chatBg?.startsWith("http") || initial?.chatBg?.startsWith("data:") ? "image" : "gradient"
   );
 
-  const resolvedAvatar = resolveImageUrl(avatarSrc);
+  const resolvedAvatar = resolveImageUrl(avatarSrc === "@bg" ? bgSrc : avatarSrc);
   const resolvedBg = resolveImageUrl(bgSrc);
+  const hasBgImage = bgTab === "image" && !!bgSrc.trim();
 
   function handleSave() {
     if (!name.trim()) return;
-    const finalAvatar = avatarSrc.trim() ? resolvedAvatar : avatar;
-    const finalBg = bgTab === "image" && bgSrc.trim() ? resolvedBg : chatBg;
-    onSave({ name: name.trim(), personality, background, avatar: finalAvatar, chatBg: finalBg });
+    const finalAvatar = avatarSrc === "@bg" ? "@bg" : (avatarSrc.trim() ? resolvedAvatar : avatar);
+    const finalBg = hasBgImage ? resolvedBg : chatBg;
+    onSave({ name: name.trim(), personality, background, avatar: finalAvatar, chatBg: finalBg, chatBgPos });
   }
 
   return (
@@ -207,43 +236,62 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
 
       <div className="relative z-10 w-full sm:max-w-lg bg-[#12121c] sm:rounded-2xl rounded-t-3xl border border-white/10 shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[88dvh]">
 
-        {/* Handle (mobile) */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-white/20" />
         </div>
 
-        {/* Title */}
         <div className="bg-gradient-to-r from-pink-600/20 to-purple-600/20 px-5 py-3.5 border-b border-white/10 flex items-center justify-between flex-shrink-0 sm:rounded-t-2xl">
-          <h2 className="text-base font-semibold text-white">
-            {initial ? "Edit Character" : "Create Character"}
-          </h2>
+          <h2 className="text-base font-semibold text-white">{initial ? "Edit Character" : "Create Character"}</h2>
           <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all">✕</button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-5 min-h-0">
 
           {/* Avatar */}
           <div>
-            <ImageInput
-              label="Avatar"
-              value={avatarSrc}
-              onChange={v => { setAvatarSrc(v); if (v) setAvatar(""); }}
-              maxW={400}
-              maxH={400}
-              placeholder="Or paste an image URL…"
-              preview={
-                <div className="w-12 h-12 rounded-full overflow-hidden border border-white/20 bg-white/5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={resolvedAvatar} alt="" className="w-full h-full object-cover" />
+            <label className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2 block">Avatar</label>
+
+            {avatarSrc === "@bg" ? (
+              /* Linked-to-background state */
+              <div className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-white/5 border border-white/10">
+                <div className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 bg-white/10"
+                  style={bgSrc ? { backgroundImage: `url(${resolvedBg})`, backgroundSize: "cover", backgroundPosition: chatBgPos } : undefined} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white leading-tight">Using background photo</p>
+                  <p className="text-xs text-white/40 leading-tight mt-0.5">One image for both — saves space</p>
                 </div>
-              }
-            />
-            {/* Emoji fallback */}
+                <button onClick={() => setAvatarSrc("")}
+                  className="text-xs text-white/40 hover:text-white transition-colors flex-shrink-0">Change</button>
+              </div>
+            ) : (
+              <ImageInput
+                label=""
+                value={avatarSrc}
+                onChange={v => { setAvatarSrc(v); if (v) setAvatar(""); }}
+                maxW={400} maxH={400}
+                placeholder="Or paste an image URL…"
+                preview={
+                  <div className="w-12 h-12 rounded-full overflow-hidden border border-white/20 bg-white/5">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={resolvedAvatar} alt="" className="w-full h-full object-cover" />
+                  </div>
+                }
+              />
+            )}
+
+            {/* Emoji grid + link-to-bg button */}
             <div className="flex flex-wrap gap-2 mt-3">
-              {EMOJIS.map(e => (
+              {hasBgImage && (
                 <button
-                  key={e}
+                  onClick={() => { setAvatarSrc("@bg"); setAvatar(""); }}
+                  className={`px-3 py-2 rounded-xl text-xs font-medium transition-all active:scale-95
+                    ${avatarSrc === "@bg" ? "bg-pink-600/40 ring-1 ring-pink-500 text-white" : "bg-white/5 text-white/60 hover:bg-white/10"}`}
+                >
+                  📷 Use background photo
+                </button>
+              )}
+              {EMOJIS.map(e => (
+                <button key={e}
                   onClick={() => { setAvatar(e); setAvatarSrc(""); }}
                   className={`w-10 h-10 rounded-xl text-xl flex items-center justify-center transition-all active:scale-95
                     ${avatar === e && !avatarSrc ? "bg-pink-600/40 ring-1 ring-pink-500" : "bg-white/5 hover:bg-white/10"}`}
@@ -255,40 +303,28 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
           {/* Name */}
           <div>
             <label className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2 block">Name *</label>
-            <input
-              type="text"
-              placeholder="e.g. Luna, Aria, Nova…"
-              value={name}
+            <input type="text" placeholder="e.g. Luna, Aria, Nova…" value={name}
               onChange={e => setName(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white placeholder-white/30 focus:outline-none focus:border-pink-500/50 transition-colors"
-              style={{ fontSize: "16px" }}
-            />
+              style={{ fontSize: "16px" }} />
           </div>
 
           {/* Personality */}
           <div>
             <label className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2 block">Personality</label>
-            <textarea
-              rows={3}
-              placeholder="e.g. Playful, teasing, deeply caring. Loves late-night conversations and isn't afraid to be bold…"
-              value={personality}
+            <textarea rows={3} placeholder="e.g. Playful, teasing, deeply caring…" value={personality}
               onChange={e => setPersonality(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white placeholder-white/30 focus:outline-none focus:border-pink-500/50 resize-none transition-colors"
-              style={{ fontSize: "16px" }}
-            />
+              style={{ fontSize: "16px" }} />
           </div>
 
           {/* Backstory */}
           <div>
             <label className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2 block">Backstory</label>
-            <textarea
-              rows={4}
-              placeholder="e.g. Luna grew up in a small coastal town and moved to the city chasing her dreams as a musician…"
-              value={background}
+            <textarea rows={4} placeholder="e.g. Luna grew up in a small coastal town…" value={background}
               onChange={e => setBackground(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-3 text-white placeholder-white/30 focus:outline-none focus:border-pink-500/50 resize-none transition-colors"
-              style={{ fontSize: "16px" }}
-            />
+              style={{ fontSize: "16px" }} />
           </div>
 
           {/* Chat Background */}
@@ -296,54 +332,57 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
             <label className="text-xs font-medium text-white/50 uppercase tracking-wider mb-2.5 block">Chat Background</label>
             <div className="flex gap-2 mb-3">
               {(["gradient", "image"] as const).map(t => (
-                <button
-                  key={t}
-                  onClick={() => setBgTab(t)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${bgTab === t ? "bg-pink-600 text-white" : "bg-white/5 text-white/50 hover:bg-white/10"}`}
-                >{t === "gradient" ? "Gradient" : "Image"}</button>
+                <button key={t} onClick={() => setBgTab(t)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${bgTab === t ? "bg-pink-600 text-white" : "bg-white/5 text-white/50 hover:bg-white/10"}`}>
+                  {t === "gradient" ? "Gradient" : "Image"}
+                </button>
               ))}
             </div>
 
             {bgTab === "gradient" ? (
               <div className="grid grid-cols-4 gap-2">
                 {GRADIENTS.map((g, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setChatBg(g)}
-                    style={{ background: g }}
-                    className={`h-14 rounded-xl border-2 transition-all active:scale-95 ${chatBg === g ? "border-pink-500" : "border-transparent hover:border-white/30"}`}
-                  />
+                  <button key={i} onClick={() => setChatBg(g)} style={{ background: g }}
+                    className={`h-14 rounded-xl border-2 transition-all active:scale-95 ${chatBg === g ? "border-pink-500" : "border-transparent hover:border-white/30"}`} />
                 ))}
               </div>
             ) : (
-              <ImageInput
-                label=""
-                value={bgSrc}
-                onChange={setBgSrc}
-                maxW={1280}
-                maxH={960}
-                placeholder="Or paste an image URL…"
-                preview={
-                  <div
-                    className="w-full h-12 rounded-lg bg-center bg-cover border border-white/10"
-                    style={{ backgroundImage: `url(${resolvedBg})` }}
+              <div className="space-y-3">
+                <ImageInput
+                  label=""
+                  value={bgSrc}
+                  onChange={v => {
+                    setBgSrc(v);
+                    // If avatar was linked, keep it linked to new image
+                  }}
+                  maxW={1280} maxH={960}
+                  placeholder="Or paste an image URL…"
+                  preview={
+                    <div className="w-full h-12 rounded-lg bg-center bg-cover border border-white/10"
+                      style={{ backgroundImage: `url(${resolvedBg})` }} />
+                  }
+                />
+
+                {/* Position picker — shown once an image is set */}
+                {bgSrc && (
+                  <BgPositionPicker
+                    src={resolvedBg}
+                    position={chatBgPos}
+                    onChange={setChatBgPos}
                   />
-                }
-              />
+                )}
+              </div>
             )}
           </div>
         </div>
 
-        {/* Footer */}
         <div className="px-5 py-4 border-t border-white/10 flex gap-3 justify-end flex-shrink-0 pb-safe">
-          <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/10 active:bg-white/10 transition-all">
+          <button onClick={onClose}
+            className="px-4 py-2.5 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/10 active:bg-white/10 transition-all">
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={!name.trim()}
-            className="px-5 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-pink-600 to-purple-600 text-white hover:opacity-90 active:opacity-80 disabled:opacity-40 transition-all"
-          >
+          <button onClick={handleSave} disabled={!name.trim()}
+            className="px-5 py-2.5 rounded-xl text-sm font-medium bg-gradient-to-r from-pink-600 to-purple-600 text-white hover:opacity-90 active:opacity-80 disabled:opacity-40 transition-all">
             {initial ? "Save Changes" : "Create"}
           </button>
         </div>
