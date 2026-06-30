@@ -5,44 +5,10 @@ import Sidebar from "./components/Sidebar";
 import ChatView from "./components/ChatView";
 import CharacterForm from "./components/CharacterForm";
 import GenerateModal from "./components/GenerateModal";
+import { dbGetCharacters, dbPutCharacters, dbDeleteCharacter, dbGetMessages, dbPutMessages, dbDeleteMessages } from "./lib/db";
 
 function genId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
-function loadCharacters(): Character[] {
-  if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem("mc_characters") || "[]"); } catch { return []; }
-}
-function saveCharacters(chars: Character[]) {
-  try {
-    localStorage.setItem("mc_characters", JSON.stringify(chars));
-  } catch {
-    // localStorage quota exceeded (likely from large base64 images) — save without images as fallback
-    try {
-      const slim = chars.map(c => ({
-        ...c,
-        avatar: c.avatar.startsWith("data:") ? "🌸" : c.avatar,
-        chatBg: c.chatBg.startsWith("data:") ? "linear-gradient(135deg,#1a1a2e,#16213e)" : c.chatBg,
-      }));
-      localStorage.setItem("mc_characters", JSON.stringify(slim));
-    } catch { /* give up silently */ }
-  }
-}
-
-const MAX_STORED_MESSAGES = 200;
-function loadMessages(characterId: string): Message[] {
-  if (typeof window === "undefined") return [];
-  try { return JSON.parse(localStorage.getItem(`mc_msgs_${characterId}`) || "[]"); } catch { return []; }
-}
-function saveMessages(characterId: string, msgs: Message[]) {
-  try {
-    const trimmed = msgs.slice(-MAX_STORED_MESSAGES);
-    localStorage.setItem(`mc_msgs_${characterId}`, JSON.stringify(trimmed));
-  } catch { /* quota exceeded — skip silently */ }
-}
-function clearMessages(characterId: string) {
-  try { localStorage.removeItem(`mc_msgs_${characterId}`); } catch { /* ignore */ }
 }
 
 export default function Home() {
@@ -56,15 +22,15 @@ export default function Home() {
   const [showGenerate, setShowGenerate] = useState(false);
 
   useEffect(() => {
-    const chars = loadCharacters();
-    setCharacters(chars);
-    if (chars.length > 0) setActiveId(chars[0].id);
+    dbGetCharacters().then(chars => {
+      setCharacters(chars);
+      if (chars.length > 0) setActiveId(chars[0].id);
+    });
   }, []);
 
-  // Load persisted messages when switching characters
   useEffect(() => {
     if (activeId) {
-      setMessages(loadMessages(activeId));
+      dbGetMessages(activeId).then(setMessages);
     } else {
       setMessages([]);
     }
@@ -72,46 +38,46 @@ export default function Home() {
 
   const activeChar = characters.find(c => c.id === activeId) ?? null;
 
-  const handleGenerateAdd = useCallback((generated: Omit<Character, "id" | "createdAt">[]) => {
+  const handleGenerateAdd = useCallback(async (generated: Omit<Character, "id" | "createdAt">[]) => {
     const newChars = generated.map(data => ({ ...data, id: genId(), createdAt: Date.now() }));
     const updated = [...characters, ...newChars];
     setCharacters(updated);
-    saveCharacters(updated);
+    await dbPutCharacters(updated);
     if (newChars.length > 0) setActiveId(newChars[newChars.length - 1].id);
     setShowGenerate(false);
     setSidebarOpen(false);
   }, [characters]);
 
-  const handleCreate = useCallback((data: Omit<Character, "id" | "createdAt">) => {
+  const handleCreate = useCallback(async (data: Omit<Character, "id" | "createdAt">) => {
     const newChar: Character = { ...data, id: genId(), createdAt: Date.now() };
     const updated = [...characters, newChar];
     setCharacters(updated);
-    saveCharacters(updated);
+    await dbPutCharacters(updated);
     setActiveId(newChar.id);
     setShowForm(false);
     setEditTarget(null);
   }, [characters]);
 
-  const handleEdit = useCallback((data: Omit<Character, "id" | "createdAt">) => {
+  const handleEdit = useCallback(async (data: Omit<Character, "id" | "createdAt">) => {
     if (!editTarget) return;
     const updated = characters.map(c => c.id === editTarget.id ? { ...c, ...data } : c);
     setCharacters(updated);
-    saveCharacters(updated);
+    await dbPutCharacters(updated);
     setShowForm(false);
     setEditTarget(null);
   }, [characters, editTarget]);
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = useCallback(async () => {
     if (!activeId) return;
-    clearMessages(activeId);
+    await dbDeleteMessages(activeId);
+    await dbDeleteCharacter(activeId);
     const updated = characters.filter(c => c.id !== activeId);
     setCharacters(updated);
-    saveCharacters(updated);
     setActiveId(updated[0]?.id ?? null);
   }, [activeId, characters]);
 
-  const handleClearChat = useCallback(() => {
-    if (activeId) clearMessages(activeId);
+  const handleClearChat = useCallback(async () => {
+    if (activeId) await dbDeleteMessages(activeId);
     setMessages([]);
   }, [activeId]);
 
@@ -130,7 +96,7 @@ export default function Home() {
       const aiMsg: Message = { id: genId(), role: "model", content: data.reply, timestamp: Date.now() };
       setMessages(prev => {
         const next = [...prev, aiMsg];
-        saveMessages(activeChar.id, next);
+        dbPutMessages(activeChar.id, next);
         return next;
       });
     } catch (err) {
@@ -150,7 +116,7 @@ export default function Home() {
     const userMsg: Message = { id: genId(), role: "user", content: text, timestamp: Date.now() };
     const updated = [...messages, userMsg];
     setMessages(updated);
-    saveMessages(activeChar.id, updated);
+    dbPutMessages(activeChar.id, updated);
     setLoading(true);
 
     try {
@@ -164,7 +130,7 @@ export default function Home() {
       const aiMsg: Message = { id: genId(), role: "model", content: data.reply, timestamp: Date.now() };
       const withReply = [...updated, aiMsg];
       setMessages(withReply);
-      saveMessages(activeChar.id, withReply);
+      dbPutMessages(activeChar.id, withReply);
     } catch (err) {
       const errMsg: Message = {
         id: genId(), role: "model",
@@ -224,7 +190,6 @@ export default function Home() {
             className="h-full flex flex-col items-center justify-center text-center px-8"
             style={{ background: "linear-gradient(135deg,#0a0a0f,#12081a)" }}
           >
-            {/* Hamburger for mobile when no char selected */}
             <button
               className="absolute top-4 left-4 w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/60 md:hidden"
               onClick={() => setSidebarOpen(true)}
