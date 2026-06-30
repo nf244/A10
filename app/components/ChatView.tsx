@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Character, Message } from "../types";
 
 interface Props {
@@ -173,8 +173,26 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
   }
 
   const isImageBg = character.chatBg.startsWith("http") || character.chatBg.startsWith("data:");
+
+  // Compute exact pixel background-size so zoom changes how much image is visible
+  const [bgSize, setBgSize] = useState("cover");
+  const computeBgSize = useCallback(() => {
+    const zoom = character.chatBgZoom ?? 1;
+    if (!isImageBg || zoom === 1) { setBgSize("cover"); return; }
+    const img = new Image();
+    img.onload = () => {
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      const coverScale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+      setBgSize(`${Math.round(img.naturalWidth * coverScale * zoom)}px ${Math.round(img.naturalHeight * coverScale * zoom)}px`);
+    };
+    img.src = character.chatBg;
+  }, [isImageBg, character.chatBg, character.chatBgZoom]);
+
+  useEffect(() => { computeBgSize(); }, [computeBgSize]);
+
   const bgStyle = isImageBg
-    ? { backgroundImage: `url(${character.chatBg})`, backgroundSize: "cover", backgroundPosition: character.chatBgPos ?? "center" }
+    ? { backgroundImage: `url(${character.chatBg})`, backgroundSize: bgSize, backgroundPosition: character.chatBgPos ?? "center", backgroundRepeat: "no-repeat" }
     : { background: character.chatBg };
   const avatarDisplay = character.avatar === "@bg" ? character.chatBg : character.avatar;
 

@@ -55,11 +55,13 @@ function extractImageFromDrop(e: React.DragEvent): File | null {
   return null;
 }
 
-// Drag-to-reposition picker — shows image and lets user tap/drag the focal point
-function BgPositionPicker({ src, position, onChange }: {
+// Drag-to-reposition + zoom picker
+function BgPositionPicker({ src, position, zoom, onChange, onChangeZoom }: {
   src: string;
   position: string;
+  zoom: number;
   onChange: (pos: string) => void;
+  onChangeZoom: (zoom: number) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -73,27 +75,48 @@ function BgPositionPicker({ src, position, onChange }: {
   }
 
   const [px, py] = position.replace(/%/g, "").split(" ").map(Number);
+  const pct = Math.round(zoom * 100);
 
   return (
-    <div
-      ref={ref}
-      className="relative w-full h-32 rounded-xl overflow-hidden cursor-crosshair select-none touch-none"
-      style={{ backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: position }}
-      onMouseDown={e => { dragging.current = true; pick(e.clientX, e.clientY); }}
-      onMouseMove={e => { if (dragging.current) pick(e.clientX, e.clientY); }}
-      onMouseUp={() => { dragging.current = false; }}
-      onMouseLeave={() => { dragging.current = false; }}
-      onTouchStart={e => pick(e.touches[0].clientX, e.touches[0].clientY)}
-      onTouchMove={e => { e.preventDefault(); pick(e.touches[0].clientX, e.touches[0].clientY); }}
-    >
-      <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+    <div className="space-y-2">
       <div
-        className="absolute w-5 h-5 rounded-full border-2 border-white bg-white/40 shadow-lg pointer-events-none"
-        style={{ left: `${px}%`, top: `${py}%`, transform: "translate(-50%, -50%)" }}
-      />
-      <p className="absolute bottom-2 inset-x-0 text-center text-xs text-white/60 pointer-events-none">
-        Drag to reposition
-      </p>
+        ref={ref}
+        className="relative w-full h-32 rounded-xl overflow-hidden cursor-crosshair select-none touch-none"
+        style={{ backgroundImage: `url(${src})`, backgroundSize: `${zoom * 100}%`, backgroundPosition: position, backgroundColor: "#000" }}
+        onMouseDown={e => { dragging.current = true; pick(e.clientX, e.clientY); }}
+        onMouseMove={e => { if (dragging.current) pick(e.clientX, e.clientY); }}
+        onMouseUp={() => { dragging.current = false; }}
+        onMouseLeave={() => { dragging.current = false; }}
+        onTouchStart={e => pick(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={e => { e.preventDefault(); pick(e.touches[0].clientX, e.touches[0].clientY); }}
+      >
+        <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+        <div
+          className="absolute w-5 h-5 rounded-full border-2 border-white bg-white/40 shadow-lg pointer-events-none"
+          style={{ left: `${px}%`, top: `${py}%`, transform: "translate(-50%, -50%)" }}
+        />
+        <p className="absolute bottom-2 inset-x-0 text-center text-xs text-white/60 pointer-events-none">
+          Drag to reposition
+        </p>
+      </div>
+
+      {/* Zoom slider */}
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-white/40 flex-shrink-0">Zoom</span>
+        <input
+          type="range" min={25} max={300} step={5}
+          value={pct}
+          onChange={e => onChangeZoom(Number(e.target.value) / 100)}
+          className="flex-1 h-1 accent-pink-500 cursor-pointer"
+        />
+        <span className="text-xs text-white/50 w-10 text-right flex-shrink-0">{pct}%</span>
+        {pct !== 100 && (
+          <button
+            onClick={() => onChangeZoom(1)}
+            className="text-xs text-white/30 hover:text-white/60 transition-colors flex-shrink-0"
+          >reset</button>
+        )}
+      </div>
     </div>
   );
 }
@@ -208,6 +231,7 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
   );
   const [chatBg, setChatBg] = useState(initial?.chatBg ?? GRADIENTS[0]);
   const [chatBgPos, setChatBgPos] = useState(initial?.chatBgPos ?? "50% 40%");
+  const [chatBgZoom, setChatBgZoom] = useState(initial?.chatBgZoom ?? 1);
   const [avatarSrc, setAvatarSrc] = useState(
     initial?.avatar === "@bg" ? "@bg" :
     (initial?.avatar?.startsWith("http") || initial?.avatar?.startsWith("data:") ? initial.avatar : "")
@@ -227,7 +251,7 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
     if (!name.trim()) return;
     const finalAvatar = avatarSrc === "@bg" ? "@bg" : (avatarSrc.trim() ? resolvedAvatar : avatar);
     const finalBg = hasBgImage ? resolvedBg : chatBg;
-    onSave({ name: name.trim(), personality, background, avatar: finalAvatar, chatBg: finalBg, chatBgPos });
+    onSave({ name: name.trim(), personality, background, avatar: finalAvatar, chatBg: finalBg, chatBgPos, chatBgZoom });
   }
 
   return (
@@ -363,12 +387,14 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
                   }
                 />
 
-                {/* Position picker — shown once an image is set */}
+                {/* Position + zoom picker — shown once an image is set */}
                 {bgSrc && (
                   <BgPositionPicker
                     src={resolvedBg}
                     position={chatBgPos}
+                    zoom={chatBgZoom}
                     onChange={setChatBgPos}
+                    onChangeZoom={setChatBgZoom}
                   />
                 )}
               </div>
