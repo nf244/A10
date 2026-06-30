@@ -25,11 +25,37 @@ function openDB(): Promise<IDBDatabase> {
 
 export async function dbGetCharacters(): Promise<Character[]> {
   const db = await openDB();
-  return new Promise((resolve, reject) => {
+  const chars: Character[] = await new Promise((resolve, reject) => {
     const req = db.transaction("characters", "readonly").objectStore("characters").getAll();
     req.onsuccess = () => resolve(((req.result ?? []) as Character[]).sort((a, b) => a.createdAt - b.createdAt));
     req.onerror = () => reject(req.error);
   });
+
+  // One-time migration from localStorage
+  if (chars.length === 0) {
+    try {
+      const raw = localStorage.getItem("mc_characters");
+      if (raw) {
+        const legacy = JSON.parse(raw) as Character[];
+        if (legacy.length > 0) {
+          await dbPutCharacters(legacy);
+          // Migrate messages for each character
+          for (const c of legacy) {
+            const msgs = localStorage.getItem(`mc_msgs_${c.id}`);
+            if (msgs) {
+              const parsed = JSON.parse(msgs) as Message[];
+              await dbPutMessages(c.id, parsed);
+              localStorage.removeItem(`mc_msgs_${c.id}`);
+            }
+          }
+          localStorage.removeItem("mc_characters");
+          return legacy.sort((a, b) => a.createdAt - b.createdAt);
+        }
+      }
+    } catch { /* ignore migration errors */ }
+  }
+
+  return chars;
 }
 
 export async function dbPutCharacters(chars: Character[]): Promise<void> {
