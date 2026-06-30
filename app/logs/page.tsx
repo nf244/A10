@@ -56,12 +56,6 @@ export default function LogsPage() {
             >
               Refresh
             </button>
-            <a
-              href="/"
-              className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-xs text-white/60 hover:text-white hover:bg-white/10 transition-all"
-            >
-              ← Chat
-            </a>
           </div>
         </div>
 

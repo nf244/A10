@@ -3,8 +3,8 @@ export interface Character {
   name: string;
   personality: string;
   background: string;
-  avatar: string;
-  chatBg: string;
+  avatar: string;       // emoji or image URL
+  chatBg: string;       // CSS gradient string or image URL
   createdAt: number;
 }
 

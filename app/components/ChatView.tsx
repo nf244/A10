@@ -10,6 +10,7 @@ interface Props {
   onEdit: () => void;
   onDelete: () => void;
   onClearChat: () => void;
+  onDeleteMessage: (id: string) => void;
   onOpenSidebar: () => void;
   loading: boolean;
 }
@@ -32,13 +33,100 @@ function TypingIndicator({ avatar }: { avatar: string }) {
   );
 }
 
-export default function ChatView({ character, messages, onSend, onContinue, onEdit, onDelete, onClearChat, onOpenSidebar, loading }: Props) {
+function MessageBubble({
+  m,
+  avatar,
+  onDelete,
+}: {
+  m: Message;
+  avatar: string;
+  onDelete: () => void;
+}) {
+  const [swipeX, setSwipeX] = useState(0);
+  const [swiping, setSwiping] = useState(false);
+  const startX = useRef(0);
+  const isUser = m.role === "user";
+  const THRESHOLD = 72;
+
+  function onTouchStart(e: React.TouchEvent) {
+    startX.current = e.touches[0].clientX;
+    setSwiping(true);
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    if (!swiping) return;
+    const dx = e.touches[0].clientX - startX.current;
+    // User bubbles swipe left, model bubbles swipe right — both reveal delete
+    const clamped = isUser
+      ? Math.min(0, Math.max(-THRESHOLD, dx))
+      : Math.max(0, Math.min(THRESHOLD, dx));
+    setSwipeX(clamped);
+  }
+
+  function onTouchEnd() {
+    setSwiping(false);
+    const abs = Math.abs(swipeX);
+    if (abs >= THRESHOLD - 4) {
+      onDelete();
+    }
+    setSwipeX(0);
+  }
+
+  const deleteOpacity = Math.min(1, Math.abs(swipeX) / THRESHOLD);
+
+  return (
+    <div className="relative flex items-end gap-2 fade-up" style={{ flexDirection: isUser ? "row-reverse" : "row" }}>
+      {/* Delete hint revealed by swipe */}
+      <div
+        className="absolute flex items-center justify-center w-8 h-8 rounded-full bg-red-600/80 text-white text-xs pointer-events-none transition-opacity"
+        style={{
+          opacity: deleteOpacity,
+          [isUser ? "right" : "left"]: "0",
+          top: "50%",
+          transform: "translateY(-50%)",
+        }}
+      >
+        ✕
+      </div>
+
+      {m.role === "model" && (
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 overflow-hidden bg-white/10 mb-0.5">
+          {(avatar.startsWith("http") || avatar.startsWith("data:"))
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={avatar} alt="" className="w-full h-full object-cover" />
+            : avatar}
+        </div>
+      )}
+
+      <div
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{ transform: `translateX(${swipeX}px)`, transition: swiping ? "none" : "transform 0.2s ease" }}
+        className={`max-w-[80%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words select-none ${
+          isUser
+            ? "bg-gradient-to-br from-pink-600 to-purple-700 text-white rounded-br-sm"
+            : "bg-black/40 backdrop-blur-md text-white/90 border border-white/10 rounded-bl-sm"
+        }`}
+      >
+        {m.content}
+      </div>
+    </div>
+  );
+}
+
+export default function ChatView({ character, messages, onSend, onContinue, onEdit, onDelete, onClearChat, onDeleteMessage, onOpenSidebar, loading }: Props) {
   const [input, setInput] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [bgView, setBgView] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Swipe-up/down to toggle bg view
+  const touchStartY = useRef(0);
+  const touchStartX = useRef(0);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -69,19 +157,54 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
     }
   }
 
+  function handleContainerTouchStart(e: React.TouchEvent) {
+    touchStartY.current = e.touches[0].clientY;
+    touchStartX.current = e.touches[0].clientX;
+  }
+
+  function handleContainerTouchEnd(e: React.TouchEvent) {
+    const dy = touchStartY.current - e.changedTouches[0].clientY;
+    const dx = Math.abs(touchStartX.current - e.changedTouches[0].clientX);
+    // Vertical swipe of >60px with mostly vertical direction
+    if (Math.abs(dy) > 60 && dx < 40) {
+      if (dy > 0) setBgView(true);   // swipe up = show bg
+      else setBgView(false);          // swipe down = show chat
+    }
+  }
+
   const isImageBg = character.chatBg.startsWith("http") || character.chatBg.startsWith("data:");
   const bgStyle = isImageBg
     ? { backgroundImage: `url(${character.chatBg})`, backgroundSize: "cover", backgroundPosition: "center" }
     : { background: character.chatBg };
 
   return (
-    <div className="flex flex-col relative" style={{ height: "100dvh" }}>
+    <div
+      className="flex flex-col relative"
+      style={{ height: "100dvh" }}
+      onTouchStart={handleContainerTouchStart}
+      onTouchEnd={handleContainerTouchEnd}
+    >
       {/* Background */}
       <div className="absolute inset-0 chat-bg" style={bgStyle} />
       {isImageBg && <div className="absolute inset-0 bg-black/50" />}
 
+      {/* Full-screen bg view overlay */}
+      {bgView && (
+        <div
+          className="absolute inset-0 z-50 flex flex-col items-center justify-end pb-12"
+          onClick={() => setBgView(false)}
+        >
+          <div className="text-white/50 text-sm flex flex-col items-center gap-1">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="19 15 12 22 5 15"/>
+            </svg>
+            swipe down to close
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <header className="relative z-20 flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-black/30 backdrop-blur-md pt-safe flex-shrink-0">
+      <header className={`relative z-20 flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-black/30 backdrop-blur-md pt-safe flex-shrink-0 transition-opacity duration-300 ${bgView ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
         {/* Hamburger — only on mobile */}
         <button
           onClick={onOpenSidebar}
@@ -144,7 +267,7 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
       </header>
 
       {/* Messages */}
-      <div className="relative z-10 flex-1 overflow-y-auto scrollbar-thin px-4 py-5 space-y-4 min-h-0">
+      <div className={`relative z-10 flex-1 overflow-y-auto scrollbar-thin px-4 py-5 space-y-4 min-h-0 transition-opacity duration-300 ${bgView ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
         {messages.length === 0 && (
           <div className="text-center py-16 fade-up">
             <div className="text-5xl mb-4 w-16 h-16 mx-auto rounded-full overflow-hidden flex items-center justify-center bg-white/10">
@@ -158,32 +281,19 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
           </div>
         )}
         {messages.map(m => (
-          <div key={m.id} className={`flex items-end gap-2 fade-up ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-            {m.role === "model" && (
-              <div className="w-7 h-7 rounded-full flex items-center justify-center text-sm flex-shrink-0 overflow-hidden bg-white/10 mb-0.5">
-                {(character.avatar.startsWith("http") || character.avatar.startsWith("data:"))
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={character.avatar} alt="" className="w-full h-full object-cover" />
-                  : character.avatar}
-              </div>
-            )}
-            <div
-              className={`max-w-[80%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
-                m.role === "user"
-                  ? "bg-gradient-to-br from-pink-600 to-purple-700 text-white rounded-br-sm"
-                  : "bg-black/40 backdrop-blur-md text-white/90 border border-white/10 rounded-bl-sm"
-              }`}
-            >
-              {m.content}
-            </div>
-          </div>
+          <MessageBubble
+            key={m.id}
+            m={m}
+            avatar={character.avatar}
+            onDelete={() => onDeleteMessage(m.id)}
+          />
         ))}
         {loading && <TypingIndicator avatar={character.avatar} />}
         <div ref={bottomRef} />
       </div>
 
       {/* Continue button */}
-      {messages.length > 0 && !loading && (
+      {messages.length > 0 && !loading && !bgView && (
         <div className="relative z-10 flex justify-center pb-1">
           <button
             onClick={onContinue}
@@ -195,7 +305,7 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
       )}
 
       {/* Input bar */}
-      <div className="relative z-10 px-3 pt-2 pb-2 border-t border-white/10 bg-black/30 backdrop-blur-md flex-shrink-0 pb-safe">
+      <div className={`relative z-10 px-3 pt-2 pb-2 border-t border-white/10 bg-black/30 backdrop-blur-md flex-shrink-0 pb-safe transition-opacity duration-300 ${bgView ? "opacity-0 pointer-events-none" : "opacity-100"}`}>
         <div className="flex items-end gap-2 bg-white/5 border border-white/10 rounded-2xl px-3 py-2 focus-within:border-pink-500/40 transition-colors">
           <textarea
             ref={inputRef}
@@ -203,7 +313,6 @@ export default function ChatView({ character, messages, onSend, onContinue, onEd
             value={input}
             onChange={e => {
               setInput(e.target.value);
-              // Auto-grow
               e.target.style.height = "auto";
               e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
             }}

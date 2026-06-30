@@ -8,6 +8,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   margin: 0;
   padding: 0;
+  /* Prevent overscroll bounce showing white on iOS */
   overscroll-behavior: none;
 }
 
@@ -37,5 +38,6 @@ body {
 
 .chat-bg { background-size: cover; background-position: center; background-repeat: no-repeat; }
 
+/* iOS safe area padding utility */
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
 .pt-safe { padding-top: env(safe-area-inset-top, 0px); }

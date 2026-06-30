@@ -11,6 +11,63 @@ function genId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+// Merge server chars with local: server is source of truth for metadata,
+// but local may have base64 images that the server strips — restore them.
+function mergeChars(server: Character[], local: Character[]): Character[] {
+  const localMap = new Map(local.map(c => [c.id, c]));
+  return server.map(sc => {
+    const lc = localMap.get(sc.id);
+    if (!lc) return sc;
+    return {
+      ...sc,
+      avatar: sc.avatar === "🌸" && lc.avatar.startsWith("data:") ? lc.avatar : sc.avatar,
+      chatBg: sc.chatBg.startsWith("linear-gradient") && lc.chatBg.startsWith("data:") ? lc.chatBg : sc.chatBg,
+    };
+  });
+}
+
+async function serverGetChars(): Promise<Character[] | null> {
+  try {
+    const res = await fetch("/api/sync/chars");
+    const data = await res.json() as { chars: Character[] | null };
+    return data.chars;
+  } catch { return null; }
+}
+
+async function serverPutChars(chars: Character[]): Promise<void> {
+  try {
+    await fetch("/api/sync/chars", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chars }),
+    });
+  } catch { /* best-effort */ }
+}
+
+async function serverGetMsgs(id: string): Promise<Message[] | null> {
+  try {
+    const res = await fetch(`/api/sync/msgs/${id}`);
+    const data = await res.json() as { msgs: Message[] | null };
+    return data.msgs;
+  } catch { return null; }
+}
+
+async function serverPutMsgs(id: string, msgs: Message[]): Promise<void> {
+  try {
+    await fetch(`/api/sync/msgs/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ msgs }),
+    });
+  } catch { /* best-effort */ }
+}
+
+async function serverDelMsgs(id: string): Promise<void> {
+  try {
+    await fetch(`/api/sync/msgs/${id}`, { method: "DELETE" });
+  } catch { /* best-effort */ }
+}
+
 export default function Home() {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -22,64 +79,101 @@ export default function Home() {
   const [showGenerate, setShowGenerate] = useState(false);
 
   useEffect(() => {
-    dbGetCharacters().then(chars => {
-      setCharacters(chars);
-      if (chars.length > 0) setActiveId(chars[0].id);
-    });
+    (async () => {
+      const local = await dbGetCharacters();
+      // Show local immediately so UI isn't blank
+      if (local.length > 0) {
+        setCharacters(local);
+        setActiveId(local[0].id);
+      }
+      // Then pull server and merge
+      const server = await serverGetChars();
+      if (server && server.length > 0) {
+        const merged = mergeChars(server, local);
+        setCharacters(merged);
+        await dbPutCharacters(merged);
+        if (!local.length) setActiveId(merged[0].id);
+      }
+    })();
   }, []);
 
   useEffect(() => {
-    if (activeId) {
-      dbGetMessages(activeId).then(setMessages);
-    } else {
-      setMessages([]);
-    }
+    if (!activeId) { setMessages([]); return; }
+    (async () => {
+      const local = await dbGetMessages(activeId);
+      if (local.length > 0) setMessages(local);
+      const server = await serverGetMsgs(activeId);
+      if (server && server.length > local.length) {
+        setMessages(server);
+        await dbPutMessages(activeId, server);
+      }
+    })();
   }, [activeId]);
 
   const activeChar = characters.find(c => c.id === activeId) ?? null;
 
+  const saveChars = useCallback(async (updated: Character[]) => {
+    setCharacters(updated);
+    await dbPutCharacters(updated);
+    serverPutChars(updated); // fire-and-forget
+  }, []);
+
+  const saveMsgs = useCallback(async (charId: string, msgs: Message[]) => {
+    await dbPutMessages(charId, msgs);
+    serverPutMsgs(charId, msgs); // fire-and-forget
+  }, []);
+
   const handleGenerateAdd = useCallback(async (generated: Omit<Character, "id" | "createdAt">[]) => {
     const newChars = generated.map(data => ({ ...data, id: genId(), createdAt: Date.now() }));
     const updated = [...characters, ...newChars];
-    setCharacters(updated);
-    await dbPutCharacters(updated);
+    await saveChars(updated);
     if (newChars.length > 0) setActiveId(newChars[newChars.length - 1].id);
     setShowGenerate(false);
     setSidebarOpen(false);
-  }, [characters]);
+  }, [characters, saveChars]);
 
   const handleCreate = useCallback(async (data: Omit<Character, "id" | "createdAt">) => {
     const newChar: Character = { ...data, id: genId(), createdAt: Date.now() };
     const updated = [...characters, newChar];
-    setCharacters(updated);
-    await dbPutCharacters(updated);
+    await saveChars(updated);
     setActiveId(newChar.id);
     setShowForm(false);
     setEditTarget(null);
-  }, [characters]);
+  }, [characters, saveChars]);
 
   const handleEdit = useCallback(async (data: Omit<Character, "id" | "createdAt">) => {
     if (!editTarget) return;
     const updated = characters.map(c => c.id === editTarget.id ? { ...c, ...data } : c);
-    setCharacters(updated);
-    await dbPutCharacters(updated);
+    await saveChars(updated);
     setShowForm(false);
     setEditTarget(null);
-  }, [characters, editTarget]);
+  }, [characters, editTarget, saveChars]);
 
   const handleDelete = useCallback(async () => {
     if (!activeId) return;
     await dbDeleteMessages(activeId);
+    serverDelMsgs(activeId);
     await dbDeleteCharacter(activeId);
     const updated = characters.filter(c => c.id !== activeId);
-    setCharacters(updated);
+    await saveChars(updated);
     setActiveId(updated[0]?.id ?? null);
-  }, [activeId, characters]);
+  }, [activeId, characters, saveChars]);
 
   const handleClearChat = useCallback(async () => {
-    if (activeId) await dbDeleteMessages(activeId);
+    if (!activeId) return;
+    await dbDeleteMessages(activeId);
+    serverDelMsgs(activeId);
     setMessages([]);
   }, [activeId]);
+
+  const handleDeleteMessage = useCallback(async (msgId: string) => {
+    if (!activeChar) return;
+    setMessages(prev => {
+      const next = prev.filter(m => m.id !== msgId);
+      saveMsgs(activeChar.id, next);
+      return next;
+    });
+  }, [activeChar, saveMsgs]);
 
   const handleContinue = useCallback(async () => {
     if (!activeChar || loading) return;
@@ -96,7 +190,7 @@ export default function Home() {
       const aiMsg: Message = { id: genId(), role: "model", content: data.reply, timestamp: Date.now() };
       setMessages(prev => {
         const next = [...prev, aiMsg];
-        dbPutMessages(activeChar.id, next);
+        saveMsgs(activeChar.id, next);
         return next;
       });
     } catch (err) {
@@ -109,14 +203,14 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [activeChar, messages, loading]);
+  }, [activeChar, messages, loading, saveMsgs]);
 
   const handleSend = useCallback(async (text: string) => {
     if (!activeChar) return;
     const userMsg: Message = { id: genId(), role: "user", content: text, timestamp: Date.now() };
     const updated = [...messages, userMsg];
     setMessages(updated);
-    dbPutMessages(activeChar.id, updated);
+    await saveMsgs(activeChar.id, updated);
     setLoading(true);
 
     try {
@@ -130,7 +224,7 @@ export default function Home() {
       const aiMsg: Message = { id: genId(), role: "model", content: data.reply, timestamp: Date.now() };
       const withReply = [...updated, aiMsg];
       setMessages(withReply);
-      dbPutMessages(activeChar.id, withReply);
+      await saveMsgs(activeChar.id, withReply);
     } catch (err) {
       const errMsg: Message = {
         id: genId(), role: "model",
@@ -141,7 +235,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, [activeChar, messages]);
+  }, [activeChar, messages, saveMsgs]);
 
   return (
     <div className="flex h-full" style={{ height: "100dvh" }}>
@@ -182,6 +276,7 @@ export default function Home() {
             onEdit={() => { setEditTarget(activeChar); setShowForm(true); }}
             onDelete={handleDelete}
             onClearChat={handleClearChat}
+            onDeleteMessage={handleDeleteMessage}
             onOpenSidebar={() => setSidebarOpen(true)}
             loading={loading}
           />

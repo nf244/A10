@@ -16,6 +16,7 @@ const GRADIENTS = [
 
 const EMOJIS = ["🌸","💜","🔥","❄️","🌙","⭐","🌹","💫","🦋","🐉","🌺","💎","🌊","🍃","🌙","😈"];
 
+// Resize image file → base64 data URL via canvas
 function readImageFile(file: File, maxW: number, maxH: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -62,7 +63,7 @@ interface ImageInputProps {
   maxH: number;
   placeholder?: string;
   label: string;
-  preview?: React.ReactNode;
+  preview?: React.ReactNode; // custom preview element
 }
 
 function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }: ImageInputProps) {
@@ -100,8 +101,9 @@ function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }
 
   return (
     <div className="space-y-2">
-      {label && <label className="text-xs font-medium text-white/50 uppercase tracking-wider block">{label}</label>}
+      <label className="text-xs font-medium text-white/50 uppercase tracking-wider block">{label}</label>
 
+      {/* Drop / paste zone */}
       <div
         onDragOver={e => { e.preventDefault(); setDragging(true); }}
         onDragLeave={() => setDragging(false)}
@@ -123,7 +125,7 @@ function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }
           <>
             <span className="text-2xl">🖼️</span>
             <p className="text-xs text-white/50 text-center px-4">
-              Click to browse · Paste (Ctrl/⌘+V) · or drag &amp; drop
+              Click to browse · Paste (Ctrl/⌘+V) · or drag & drop
             </p>
           </>
         )}
@@ -136,6 +138,7 @@ function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }
         />
       </div>
 
+      {/* URL fallback */}
       <div className="relative">
         <input
           type="url"
@@ -151,15 +154,21 @@ function ImageInput({ value, onChange, maxW, maxH, placeholder, label, preview }
         />
         {value && (
           <button
-            onClick={e => { e.stopPropagation(); onChange(""); }}
+            onClick={() => onChange("")}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/40 hover:text-white text-xs transition-all"
           >✕</button>
         )}
       </div>
 
-      {wasConverted && <p className="text-xs text-emerald-400/80">✓ Google Drive link converted to direct URL</p>}
-      {isPhotos && <p className="text-xs text-amber-400/80">⚠ Google Photos links don&apos;t work — use Drive instead</p>}
-      {isData && <p className="text-xs text-white/30">✓ Image stored locally</p>}
+      {wasConverted && (
+        <p className="text-xs text-emerald-400/80">✓ Google Drive link converted to direct URL</p>
+      )}
+      {isPhotos && (
+        <p className="text-xs text-amber-400/80">⚠ Google Photos links don&apos;t work — use Drive instead</p>
+      )}
+      {isData && (
+        <p className="text-xs text-white/30">✓ Image stored locally</p>
+      )}
     </div>
   );
 }
@@ -198,10 +207,12 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
 
       <div className="relative z-10 w-full sm:max-w-lg bg-[#12121c] sm:rounded-2xl rounded-t-3xl border border-white/10 shadow-2xl flex flex-col max-h-[92dvh] sm:max-h-[88dvh]">
 
+        {/* Handle (mobile) */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden flex-shrink-0">
           <div className="w-10 h-1 rounded-full bg-white/20" />
         </div>
 
+        {/* Title */}
         <div className="bg-gradient-to-r from-pink-600/20 to-purple-600/20 px-5 py-3.5 border-b border-white/10 flex items-center justify-between flex-shrink-0 sm:rounded-t-2xl">
           <h2 className="text-base font-semibold text-white">
             {initial ? "Edit Character" : "Create Character"}
@@ -209,6 +220,7 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
           <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all">✕</button>
         </div>
 
+        {/* Body */}
         <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-5 min-h-0">
 
           {/* Avatar */}
@@ -227,6 +239,7 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
                 </div>
               }
             />
+            {/* Emoji fallback */}
             <div className="flex flex-wrap gap-2 mt-3">
               {EMOJIS.map(e => (
                 <button
@@ -321,6 +334,7 @@ export default function CharacterForm({ initial, onSave, onClose }: Props) {
           </div>
         </div>
 
+        {/* Footer */}
         <div className="px-5 py-4 border-t border-white/10 flex gap-3 justify-end flex-shrink-0 pb-safe">
           <button onClick={onClose} className="px-4 py-2.5 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/10 active:bg-white/10 transition-all">
             Cancel
