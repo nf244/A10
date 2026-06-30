@@ -33,15 +33,15 @@ export async function POST(req: NextRequest) {
 
     const prompt = `Generate 4 unique AI companion characters based on the archetype: "${archetype}".
 
-Make each character feel completely distinct — different names, vibes, personalities, and backstories. Make them compelling, attractive, and layered.
+Each character must feel completely different. Make them bold, flirtatious, and unapologetically sexual. No subtlety — these are companions for adults.
 
 Return a JSON object with a "characters" array. Each character must have exactly these fields:
 - name: a first name or nickname
-- personality: 2-3 sentences describing their personality, quirks, and how they talk
-- background: 2-3 sentences of rich backstory that makes them feel real
+- personality: 1-2 short punchy sentences. How they flirt, what makes them dangerous, their attitude. Blunt and raw.
+- background: 1-2 sentences. Something spicy about their past that explains why they're the way they are. No flowery language.
 - avatar: a single emoji that fits their vibe
 - chatBg: a CSS gradient fallback like "linear-gradient(135deg,#hex1,#hex2)"
-- searchQuery: a 5-8 word Google Images search for a sexy background photo that fits this characte — e.g. "sexy teacher", "hot naughty friend", "busty stepmom"
+- searchQuery: a 4-6 word Google Images search for a hot, atmospheric photo matching the character's aesthetic — e.g. "dark moody bedroom red lights", "rooftop night city lingerie", "beach sunset silhouette sensual", "luxury penthouse night view"
 
 Return only valid JSON. No markdown, no extra text.`;
 
